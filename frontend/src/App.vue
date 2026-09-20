@@ -28,7 +28,9 @@ const email = ref("admin@example.com"),
     dark = ref(false);
 
 const sidebarVisible = ref(true);
-watch(dark, (value) => document.documentElement.classList.toggle("app-dark", value), { immediate: true });
+watch(dark, (value) => document.documentElement.classList.toggle("app-dark", value), {
+    immediate: true,
+});
 
 const activeView = ref<WorkspaceView>("overview");
 
@@ -116,19 +118,45 @@ onMounted(async () => {
             @submit="login"
         />
         <template v-else>
-            <AppHeader v-model:dark="dark" :sidebar-visible="sidebarVisible" :user="user" @toggle-menu="sidebarVisible = !sidebarVisible" @logout="logout" />
-            <div class="mx-auto flex max-w-[1600px] flex-col gap-6 p-4 lg:flex-row lg:p-8">
-                <WorkspaceNav v-if="sidebarVisible" v-model="activeView" :is-superuser="user.is_superuser" />
+            <AppHeader
+                v-model:dark="dark"
+                :sidebar-visible="sidebarVisible"
+                :user="user"
+                @home="activeView = 'overview'"
+                @toggle-menu="sidebarVisible = !sidebarVisible"
+                @logout="logout"
+            />
+            <div
+                class="mx-auto flex max-w-[1600px] flex-col gap-6 p-4 lg:flex-row lg:p-8"
+            >
+                <WorkspaceNav
+                    v-if="sidebarVisible"
+                    v-model="activeView"
+                    :is-superuser="user.is_superuser"
+                />
                 <section class="min-w-0 flex-1 space-y-6">
-                    <DashboardHero :user="user" :active-view="activeView" @create="dialog = true" />
+                    <DashboardHero
+                        :user="user"
+                        :active-view="activeView"
+                        @create="dialog = true"
+                    />
                     <DashboardStats
                         v-if="activeView === 'overview'"
                         :item-count="items.length"
                         :is-superuser="user.is_superuser"
                     />
-                    <ItemsTable v-if="activeView !== 'users'" :items="items" @remove="remove" />
-                    <UsersTable v-if="user.is_superuser && activeView !== 'items'" :users="users" />
-                    <footer class="py-4 text-center text-sm text-muted-color">Axum + Vue <span class="mx-2">·</span> Admin workspace</footer>
+                    <ItemsTable
+                        v-if="activeView !== 'users'"
+                        :items="items"
+                        @remove="remove"
+                    />
+                    <UsersTable
+                        v-if="user.is_superuser && activeView !== 'items'"
+                        :users="users"
+                    />
+                    <footer class="py-4 text-center text-sm text-muted-color">
+                        Axum + Vue <span class="mx-2">·</span> Admin workspace
+                    </footer>
                 </section>
             </div>
         </template>
