@@ -1,36 +1,44 @@
 <script setup lang="ts">
-import Button from "primevue/button";
+import { computed, ref } from "vue";
+import ItemActions from "./ItemActions.vue";
 import Card from "primevue/card";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
 import type { Item } from "../types";
 
-defineProps<{ items: Item[] }>();
-const emit = defineEmits<{ remove: [id: string] }>();
+const props = defineProps<{ items: Item[] }>();
+const indexedRows = computed(() => props.items.map((row, index) => ({ ...row, rowIndex: index + 1 })));
+const emit = defineEmits<{ remove: [item: Item]; edit: [item: Item] }>();
+const first = ref(0);
+const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+function formatDate(value: string) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "—" : dateFormat.format(date);
+}
 </script>
 
 <template>
     <Card class="overflow-hidden rounded-2xl border border-surface shadow-none">
         <template #title>My items</template>
         <template #content>
-            <DataTable
-                :value="items"
+            <DataTable v-model:first="first"
+                :value="indexedRows"
                 paginator :rows="10" :rowsPerPageOptions="[5, 10, 20]"
                 responsiveLayout="scroll"
                 dataKey="id"
             >
+                <Column field="rowIndex" header="#" class="w-16" sortable />
                 <Column field="title" header="Title" sortable />
                 <Column field="description" header="Description" />
-                <Column header="">
-                    <template #body="slotProps">
-                        <Button
-                            icon="pi pi-trash"
-                            severity="danger"
-                            text
-                            rounded
-                            aria-label="Delete item"
-                            @click="emit('remove', slotProps.data.id)"
-                        />
+                <Column field="quantity" header="Quantity" sortable />
+                <Column field="created_at" header="Creation date" sortable>
+                    <template #body="{ data }">
+                        <time :datetime="data.created_at" class="whitespace-nowrap">{{ formatDate(data.created_at) }}</time>
+                    </template>
+                </Column>
+                <Column header="Actions">
+                    <template #body="{ data }">
+                        <ItemActions :item="data" @edit="emit('edit', $event)" @remove="emit('remove', $event)" />
                     </template>
                 </Column>
                 <template #empty>
