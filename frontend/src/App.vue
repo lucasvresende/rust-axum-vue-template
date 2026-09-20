@@ -102,6 +102,7 @@ onMounted(async () => {
         }
 });
 </script>
+
 <template>
     <Toast />
     <main :class="{ dark }">
@@ -239,51 +240,52 @@ onMounted(async () => {
                             </template>
                         </Card>
                     </div>
-                    <Card v-if="activeView !== 'users'"
-                        ><template #title>My items</template
-                        ><template #content
-                            ><DataTable
+                    <Card v-if="activeView !== 'users'">
+                        <template #title>My items</template>
+                        <template #content>
+                            <DataTable
                                 :value="items"
                                 stripedRows
                                 responsiveLayout="scroll"
                                 dataKey="id"
-                                ><Column field="title" header="Title" /><Column
-                                    field="description"
-                                    header="Description"
-                                /><Column header=""
-                                    ><template #body="slotProps"
-                                        ><Button
+                            >
+                                <Column field="title" header="Title" />
+                                <Column field="description" header="Description" />
+                                <Column header="">
+                                    <template #body="slotProps">
+                                        <Button
                                             icon="pi pi-trash"
                                             severity="danger"
                                             text
                                             rounded
                                             aria-label="Delete item"
-                                            @click="
-                                                remove(slotProps.data.id)
-                                            " /></template></Column
-                                ><template #empty
-                                    >No items yet. Create your first one.</template
-                                ></DataTable
-                            ></template
-                        ></Card
-                    >
+                                            @click="remove(slotProps.data.id)"
+                                        />
+                                    </template>
+                                </Column>
+                                <template #empty>
+                                    No items yet. Create your first one.
+                                </template>
+                            </DataTable>
+                        </template>
+                    </Card>
                     <Card
                         v-if="user.is_superuser && activeView !== 'items'"
                         class="users"
-                        ><template #title>Users</template
-                        ><template #content
-                            ><DataTable :value="users" size="small"
-                                ><Column field="full_name" header="Name" /><Column
-                                    field="email"
-                                    header="Email"
-                                /><Column header="Role"
-                                    ><template #body="s">{{
-                                        s.data.is_superuser ? "Admin" : "Member"
-                                    }}</template></Column
-                                ></DataTable
-                            ></template
-                        ></Card
                     >
+                        <template #title>Users</template>
+                        <template #content>
+                            <DataTable :value="users" size="small">
+                                <Column field="full_name" header="Name" />
+                                <Column field="email" header="Email" />
+                                <Column header="Role">
+                                    <template #body="s">
+                                        {{ s.data.is_superuser ? "Admin" : "Member" }}
+                                    </template>
+                                </Column>
+                            </DataTable>
+                        </template>
+                    </Card>
                 </section>
             </div>
         </template>
@@ -293,9 +295,11 @@ onMounted(async () => {
         modal
         header="Create item"
         :style="{ width: '28rem' }"
-        ><form class="stack" @submit.prevent="addItem">
-            <label>Title<InputText v-model="title" autofocus required /></label
-            ><label>Description<InputText v-model="description" /></label
-            ><Button type="submit" label="Create item" /></form
-    ></Dialog>
+    >
+        <form class="stack" @submit.prevent="addItem">
+            <label>Title<InputText v-model="title" autofocus required /></label>
+            <label>Description<InputText v-model="description" /></label>
+            <Button type="submit" label="Create item" />
+        </form>
+    </Dialog>
 </template>
