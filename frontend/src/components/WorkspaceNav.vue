@@ -6,36 +6,17 @@ const activeView = defineModel<WorkspaceView>({ required: true });
 </script>
 
 <template>
-    <aside>
-        <p class="overline">WORKSPACE</p>
-        <nav aria-label="Workspace">
-            <button
-                type="button"
-                :class="{ active: activeView === 'overview' }"
-                :aria-current="
-                    activeView === 'overview' ? 'page' : undefined
-                "
-                @click="activeView = 'overview'"
-            >
-                <i class="pi pi-home"></i> Overview
-            </button>
-            <button
-                type="button"
-                :class="{ active: activeView === 'items' }"
-                :aria-current="activeView === 'items' ? 'page' : undefined"
-                @click="activeView = 'items'"
-            >
-                <i class="pi pi-box"></i> My items
-            </button>
-            <button
-                v-if="isSuperuser"
-                type="button"
-                :class="{ active: activeView === 'users' }"
-                :aria-current="activeView === 'users' ? 'page' : undefined"
-                @click="activeView = 'users'"
-            >
-                <i class="pi pi-users"></i> Users
-            </button>
+    <aside id="workspace-navigation" class="shrink-0 rounded-2xl border border-surface bg-surface-0 p-5 dark:bg-surface-900 lg:sticky lg:top-28 lg:h-[calc(100vh-9rem)] lg:w-64">
+        <p class="mb-3 px-3 text-xs font-bold uppercase tracking-wider text-muted-color">Workspace</p>
+        <nav aria-label="Workspace" class="flex gap-1 lg:flex-col">
+            <template v-for="entry in ([{ id: 'overview', label: 'Overview', icon: 'pi-home' }, { id: 'items', label: 'My items', icon: 'pi-box' }, { id: 'users', label: 'Users', icon: 'pi-users' }] as const)" :key="entry.id">
+                <button v-if="entry.id !== 'users' || isSuperuser" type="button"
+                    class="flex flex-1 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-3 text-left text-sm transition-colors hover:bg-emphasis focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary lg:flex-none"
+                    :class="activeView === entry.id ? 'bg-highlight font-semibold text-primary' : 'text-muted-color'"
+                    :aria-current="activeView === entry.id ? 'page' : undefined" @click="activeView = entry.id">
+                    <i :class="['pi', entry.icon]" aria-hidden="true"></i>{{ entry.label }}
+                </button>
+            </template>
         </nav>
     </aside>
 </template>

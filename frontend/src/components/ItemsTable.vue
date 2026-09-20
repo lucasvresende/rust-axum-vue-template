@@ -10,16 +10,16 @@ const emit = defineEmits<{ remove: [id: string] }>();
 </script>
 
 <template>
-    <Card>
+    <Card class="overflow-hidden rounded-2xl border border-surface shadow-none">
         <template #title>My items</template>
         <template #content>
             <DataTable
                 :value="items"
-                stripedRows
+                paginator :rows="10" :rowsPerPageOptions="[5, 10, 20]"
                 responsiveLayout="scroll"
                 dataKey="id"
             >
-                <Column field="title" header="Title" />
+                <Column field="title" header="Title" sortable />
                 <Column field="description" header="Description" />
                 <Column header="">
                     <template #body="slotProps">

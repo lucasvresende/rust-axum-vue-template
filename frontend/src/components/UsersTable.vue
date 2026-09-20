@@ -9,13 +9,14 @@ defineProps<{ users: User[] }>();
 
 <template>
     <Card
-        class="users"
+        class="overflow-hidden rounded-2xl border border-surface shadow-none"
     >
         <template #title>Users</template>
         <template #content>
-            <DataTable :value="users" size="small">
-                <Column field="full_name" header="Name" />
-                <Column field="email" header="Email" />
+            <DataTable :value="users" paginator :rows="10" :rowsPerPageOptions="[5, 10, 20]" dataKey="id" scrollable>
+                <template #empty>No workspace members found.</template>
+                <Column field="full_name" header="Name" sortable />
+                <Column field="email" header="Email" sortable />
                 <Column header="Role">
                     <template #body="s">
                         {{ s.data.is_superuser ? "Admin" : "Member" }}

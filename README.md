@@ -87,6 +87,14 @@ cd frontend && npm run build && npx playwright test
 - [SQLx checked macros and migrations](https://docs.rs/sqlx/latest/sqlx/)
 - [PrimeVue documentation](https://primevue.org/)
 
+## Admin UI and Tailwind
+
+The login, overview, inventory, and users templates follow [Sakai's official layout](https://github.com/primefaces/sakai-vue/tree/master/src/layout) and [dashboard examples](https://github.com/primefaces/sakai-vue/tree/master/src/components/dashboard), adapted to the existing API data. Navigation can be collapsed from the topbar and stacks above the content on small screens.
+
+Styling uses Tailwind CSS v4 via `@tailwindcss/vite` and the official `tailwindcss-primeui` integration. Add utility classes directly to Vue templates; semantic utilities such as `bg-primary`, `border-surface`, and `text-muted-color` follow the Aura theme. PrimeVue controls retain their Aura styling, with the `primevue` CSS layer before Tailwind utilities so utilities can override controls. See the [official PrimeVue Tailwind guide](https://primevue.org/tailwind/).
+
+`frontend/src/style.css` contains the Tailwind imports and shared base styles. The `.app-dark` class is applied to the document root, keeping Tailwind, PrimeVue, and teleported dialogs in sync. No separate Tailwind config file is needed for v4.
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).

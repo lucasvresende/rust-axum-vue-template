@@ -14,11 +14,11 @@ const emit = defineEmits<{ submit: [] }>();
         v-model:visible="visible"
         modal
         header="Create item"
-        :style="{ width: '28rem' }"
+        class="w-[calc(100vw-2rem)] max-w-md"
     >
-        <form class="stack" @submit.prevent="emit('submit')">
-            <label>Title<InputText v-model="title" autofocus required /></label>
-            <label>Description<InputText v-model="description" /></label>
+        <form class="grid gap-5" @submit.prevent="emit('submit')">
+            <label class="grid gap-2 text-sm font-medium">Title<InputText v-model="title" autofocus required /></label>
+            <label class="grid gap-2 text-sm font-medium">Description<InputText v-model="description" /></label>
             <Button type="submit" label="Create item" />
         </form>
     </Dialog>
