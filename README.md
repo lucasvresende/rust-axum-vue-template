@@ -188,6 +188,46 @@ Styling uses Tailwind CSS v4 via `@tailwindcss/vite` and the official `tailwindc
 
 Items include a non-negative integer `quantity` (defaults to 1 for existing items and requests that omit it) and a server-generated `created_at` timestamp. The admin table can sort both columns and formats creation dates in the browser's local time. Apply migrations before compiling changed SQLx queries: `cargo sqlx migrate run` with `DATABASE_URL` configured. Startup also runs pending migrations.
 
+## Page URLs and production hosting
+
+Workspace pages use Vue Router history URLs: `/overview`, `/items`, and `/users`.
+Navigation supports browser Back/Forward, bookmarks, and refreshes. Opening a page
+while signed out redirects to `/login?redirect=...` and continues to the requested
+workspace page after sign-in. Only known workspace paths are accepted as redirect
+destinations. Signing out goes to `/login`; signed-in visits to `/login` go to
+`/overview`.
+The Users page is restricted to administrators; members are returned to Overview.
+The root URL and unknown frontend paths redirect to `/overview`.
+
+Build the frontend with `cd frontend && npm run build`, then serve `frontend/dist`.
+The production host must serve `index.html` for frontend page URLs, preserve static
+asset requests, and forward `/api/` requests to Axum. Vite's development proxy is
+not part of the production build.
+
+For example, inside an Nginx `server` block (adjust paths and the API upstream for
+your deployment):
+
+```nginx
+root /srv/app/frontend/dist;
+index index.html;
+
+location /api/ {
+    proxy_pass http://127.0.0.1:8000;
+}
+
+location /assets/ {
+    try_files $uri =404;
+}
+
+location / {
+    try_files $uri $uri/ /index.html;
+}
+```
+
+The fallback serves the app without redirecting the browser away from the requested
+page. API errors and missing built assets are not rewritten to HTML. If using a
+static hosting provider, configure its equivalent SPA fallback and API proxy.
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).

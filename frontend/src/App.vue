@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import Toast from "primevue/toast";
@@ -52,7 +53,29 @@ watch(dark, (value) => document.documentElement.classList.toggle("app-dark", val
     immediate: true,
 });
 
-const activeView = ref<WorkspaceView>("overview");
+const route = useRoute();
+const router = useRouter();
+const activeView = computed<WorkspaceView>(() =>
+    route.name === "items" || route.name === "users" ? route.name : "overview",
+);
+function loginDestination() {
+    const redirect = route.query.redirect;
+    // Only known workspace paths are accepted, never external URLs or /login.
+    return typeof redirect === "string" && ["/overview", "/items", "/users"].includes(redirect)
+        ? redirect
+        : "/overview";
+}
+
+watch([activeView, user], ([view, currentUser]) => {
+    if (view === "users" && currentUser && !currentUser.is_superuser) {
+        void router.replace({ name: "overview" });
+    }
+});
+watch(activeView, () => {
+    dialog.value = false;
+    deleteDialog.value = false;
+    pendingDelete.value = null;
+});
 
 function notify(severity: "success" | "error", detail: string) {
     toast.add({
@@ -68,6 +91,8 @@ async function load() {
     if (user.value.is_superuser) users.value = await api<User[]>("/users");
 }
 async function login() {
+    if (loading.value) return;
+    const destination = loginDestination();
     loading.value = true;
     try {
         const t = await api<{ access_token: string }>("/login", {
@@ -76,8 +101,10 @@ async function login() {
         });
         session.token = t.access_token;
         await load();
+        await router.replace(destination === "/users" && !user.value?.is_superuser ? "/overview" : destination);
         notify("success", "Welcome back.");
     } catch (e: any) {
+        clearSession();
         notify("error", e.message);
     } finally {
         loading.value = false;
@@ -124,22 +151,27 @@ async function remove() {
         deleting.value = false;
     }
 }
-function logout() {
+function clearSession() {
     dialog.value = false;
     deleteDialog.value = false;
     pendingDelete.value = null;
-    activeView.value = "overview";
     session.token = null;
     user.value = null;
     items.value = [];
     users.value = [];
+}
+function logout() {
+    clearSession();
+    void router.replace({ name: "login" });
 }
 onMounted(async () => {
     if (session.token)
         try {
             await load();
         } catch {
-            logout();
+            const destination = route.fullPath;
+            clearSession();
+            await router.replace({ name: "login", query: { redirect: destination } });
         }
 });
 </script>
@@ -148,18 +180,18 @@ onMounted(async () => {
     <Toast class="max-w-[calc(100vw-2.5rem)]" />
     <main class="min-h-screen">
         <LoginForm
-            v-if="!user"
+            v-if="route.name === 'login'"
             v-model:email="email"
             v-model:password="password"
             :loading="loading"
             @submit="login"
         />
-        <template v-else>
+        <template v-else-if="user">
             <AppHeader
                 v-model:dark="dark"
                 :sidebar-visible="sidebarVisible"
                 :user="user"
-                @home="activeView = 'overview'"
+                @home="router.push({ name: 'overview' })"
                 @toggle-menu="sidebarVisible = !sidebarVisible"
                 @logout="logout"
             />
@@ -168,7 +200,7 @@ onMounted(async () => {
             >
                 <WorkspaceNav
                     v-if="sidebarVisible"
-                    v-model="activeView"
+                    :active-view="activeView"
                     :is-superuser="user.is_superuser"
                 />
                 <section class="min-w-0 flex-1 space-y-6">
