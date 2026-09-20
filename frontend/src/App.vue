@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import Toast from "primevue/toast";
 import { useToast } from "primevue/usetoast";
 import { api, session } from "./api";
@@ -26,6 +26,9 @@ const email = ref("admin@example.com"),
     dialog = ref(false),
     loading = ref(false),
     dark = ref(false);
+
+const sidebarVisible = ref(true);
+watch(dark, (value) => document.documentElement.classList.toggle("app-dark", value), { immediate: true });
 
 const activeView = ref<WorkspaceView>("overview");
 
@@ -103,8 +106,8 @@ onMounted(async () => {
 </script>
 
 <template>
-    <Toast />
-    <main :class="{ dark }">
+    <Toast class="max-w-[calc(100vw-2.5rem)]" />
+    <main class="min-h-screen">
         <LoginForm
             v-if="!user"
             v-model:email="email"
@@ -113,10 +116,10 @@ onMounted(async () => {
             @submit="login"
         />
         <template v-else>
-            <AppHeader v-model:dark="dark" :user="user" @logout="logout" />
-            <div class="layout">
-                <WorkspaceNav v-model="activeView" :is-superuser="user.is_superuser" />
-                <section class="content">
+            <AppHeader v-model:dark="dark" :sidebar-visible="sidebarVisible" :user="user" @toggle-menu="sidebarVisible = !sidebarVisible" @logout="logout" />
+            <div class="mx-auto flex max-w-[1600px] flex-col gap-6 p-4 lg:flex-row lg:p-8">
+                <WorkspaceNav v-if="sidebarVisible" v-model="activeView" :is-superuser="user.is_superuser" />
+                <section class="min-w-0 flex-1 space-y-6">
                     <DashboardHero :user="user" :active-view="activeView" @create="dialog = true" />
                     <DashboardStats
                         v-if="activeView === 'overview'"
@@ -125,6 +128,7 @@ onMounted(async () => {
                     />
                     <ItemsTable v-if="activeView !== 'users'" :items="items" @remove="remove" />
                     <UsersTable v-if="user.is_superuser && activeView !== 'items'" :users="users" />
+                    <footer class="py-4 text-center text-sm text-muted-color">Axum + Vue <span class="mx-2">·</span> Admin workspace</footer>
                 </section>
             </div>
         </template>

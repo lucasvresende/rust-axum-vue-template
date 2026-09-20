@@ -6,6 +6,6 @@ import "primeicons/primeicons.css";
 import App from "./App.vue";
 import "./style.css";
 createApp(App)
-  .use(PrimeVue, { theme: { preset: Aura, options: { darkModeSelector: ".dark" } } })
+  .use(PrimeVue, { theme: { preset: Aura, options: { darkModeSelector: ".app-dark", cssLayer: { name: "primevue", order: "theme, base, primevue, components, utilities" } } } })
   .use(ToastService)
   .mount("#app");

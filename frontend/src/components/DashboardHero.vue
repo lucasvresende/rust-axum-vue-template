@@ -7,18 +7,18 @@ const emit = defineEmits<{ create: [] }>();
 </script>
 
 <template>
-    <div class="hero">
+    <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div v-if="activeView === 'overview'">
-            <p class="overline">DASHBOARD</p>
-            <h1>
+            <p class="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-color">DASHBOARD</p>
+            <h1 class="mb-2 text-2xl font-semibold tracking-tight lg:text-3xl">
                 Good to see you, {{ user.full_name || user.email }}.
             </h1>
-            <p>Manage your account and your personal inventory.</p>
+            <p class="text-muted-color">Manage your account and your personal inventory.</p>
         </div>
         <div v-else>
-            <p class="overline">WORKSPACE</p>
-            <h1>{{ activeView === "items" ? "My items" : "Users" }}</h1>
-            <p>
+            <p class="mb-2 text-xs font-semibold uppercase tracking-widest text-muted-color">WORKSPACE</p>
+            <h1 class="mb-2 text-2xl font-semibold tracking-tight lg:text-3xl">{{ activeView === "items" ? "My items" : "Users" }}</h1>
+            <p class="text-muted-color">
                 {{
                     activeView === "items"
                         ? "Manage your personal inventory."
