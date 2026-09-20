@@ -17,6 +17,8 @@ cd /path/to/rust-axum-vue-template
 cp .env.example .env
 docker compose up -d db mailpit
 set -a; source .env; set +a
+cargo install sqlx-cli --version 0.9.0 --locked --no-default-features --features rustls,postgres
+cargo sqlx migrate run
 cargo run
 ```
 
@@ -36,37 +38,125 @@ npm run dev
 
 Open `http://localhost:5173`. The initial login is `admin@example.com` / `changethis`; replace this configuration before deployment. Mailpit is available at `http://localhost:8025`.
 
-## Compile-time SQL verification
+## Migration workflow
 
-SQLx macros intentionally require a database schema during `cargo check` / `cargo test`. Keep the database service running and export `DATABASE_URL` before compiling:
+Run these commands from the repository root. The project uses SQLx 0.9, PostgreSQL, and versioned SQL files in `migrations/`. See the [SQLx CLI documentation](https://github.com/transact-rs/sqlx/blob/v0.9.0/sqlx-cli/README.md).
+
+### Install and connect
+
+Install the matching CLI once:
 
 ```bash
+cargo install sqlx-cli --version 0.9.0 --locked --no-default-features --features rustls,postgres
+cargo sqlx --version
+```
+
+Create `.env` from `.env.example` if it does not exist, then start PostgreSQL and export the connection settings:
+
+```bash
+docker compose up -d db
 set -a; source .env; set +a
+```
+
+`DATABASE_URL` must point to the intended database. The Compose service creates the configured `app` database on first startup; for a separately provisioned PostgreSQL server, `cargo sqlx database create` creates the database named in `DATABASE_URL` if your role has permission.
+
+### Apply and inspect migrations
+
+```bash
+cargo sqlx migrate info
+cargo sqlx migrate run
+cargo sqlx migrate info
+```
+
+SQLx records applied versions and checksums in `_sqlx_migrations`. Run pending migrations **before compiling** code that references new tables or columns: `query!` and `query_as!` check the live schema during compilation.
+
+The application also applies pending embedded migrations on startup. This happens after compilation, so it cannot prepare the database for a first build. `build.rs` watches `migrations/` and triggers recompilation when migration files change; rebuild the application to embed newly added migrations.
+
+### Create a schema change
+
+```bash
+cargo sqlx migrate add --timestamp --simple add_item_location
+```
+
+Edit the generated `migrations/<timestamp>_add_item_location.sql`, for example:
+
+```sql
+ALTER TABLE items ADD COLUMN location TEXT NOT NULL DEFAULT '';
+```
+
+Then apply the migration and validate the corresponding Rust changes:
+
+```bash
+cargo sqlx migrate run
 cargo check
 cargo test
 ```
 
-For hermetic CI, generate and commit SQLx offline metadata after migrations change:
+Commit the migration together with the application changes. New versions must sort after all previously applied versions. Do not edit, rename, or delete an applied migration; make corrections in a new migration so deployed databases retain a consistent history. If SQLx reports a checksum mismatch, restore the original applied file and add a follow-up migration.
+
+### Reversible migrations
+
+For a new change that needs an explicit rollback, generate an up/down pair instead:
 
 ```bash
-cargo install sqlx-cli --no-default-features --features rustls,postgres
+cargo sqlx migrate add --timestamp --reversible add_item_location
+```
+
+Write the schema change in `<timestamp>_add_item_location.up.sql` and its inverse in `<timestamp>_add_item_location.down.sql`. These are alternatives to the simple migration example above. For that example, the down SQL would be:
+
+```sql
+ALTER TABLE items DROP COLUMN location;
+```
+
+On a development database, inspect the rollback before running it:
+
+```bash
+cargo sqlx migrate revert --dry-run
+cargo sqlx migrate revert
+cargo sqlx migrate info
+```
+
+A rollback can discard data (the example drops all stored locations). The repository's existing `.sql` migrations have no down files and cannot be reverted with this command; correct those with a new forward migration. Stop the app before reverting: restarting it applies pending embedded up migrations again. Reapply a reverted migration with `cargo sqlx migrate run` before compiling code that depends on it.
+
+### Recovering a local development database
+
+The initial migration uses `IF NOT EXISTS` to accommodate tables created manually during local bootstrap. Record the pending migrations before rebuilding:
+
+```bash
+set -a; source .env; set +a
+cargo sqlx migrate run
+cargo check
+cargo run
+```
+
+This assumes the manually created tables match the initial schema; `IF NOT EXISTS` does not reconcile different columns or constraints. Later migrations are applied once through SQLx's migration history.
+
+## Compile-time SQL verification
+
+With PostgreSQL running and `DATABASE_URL` configured:
+
+```bash
+set -a; source .env; set +a
+cargo sqlx migrate run
+cargo check
+cargo test
+```
+
+For builds without a database connection, generate query metadata against the migrated database and commit the resulting `.sqlx/` directory:
+
+```bash
 cargo sqlx prepare
 SQLX_OFFLINE=true cargo check
 ```
 
-## Migration workflow
-
-Create a timestamped SQL file under `migrations/`; the application runs its embedded migrations on startup. The build script ensures that a changed migration recompiles the embedded migrator on stable Rust. Do not edit a migration already deployed to an environment.
-
-### Recovering a local development database
-
-If an earlier attempt created tables manually and startup reports `relation "users" already exists`, rebuild and run once from the template directory. The initial migration is idempotent specifically for this local-bootstrap case and SQLx will record it on that run:
+Regenerate metadata whenever SQL queries or their schema change. A CI job with a migrated database can verify that the committed metadata is current:
 
 ```bash
-cd /path/to/rust-axum-vue-template
-set -a; source .env; set +a
-cargo run
+cargo sqlx migrate run
+cargo sqlx prepare --check
 ```
+
+Offline metadata supports compilation only; the running API still needs PostgreSQL and applies its embedded migrations at startup.
 
 ## Structure
 
@@ -76,6 +166,7 @@ cargo run
 
 ```bash
 set -a; source .env; set +a
+cargo sqlx migrate run
 cargo check
 cd frontend && npm run build && npx playwright test
 ```
