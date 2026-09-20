@@ -32,13 +32,13 @@ for (const mobile of [false, true]) {
 
     const nav = page.getByRole("navigation", { name: "Workspace" });
 
-    await nav.getByRole("button", { name: "My items" }).click();
+    await nav.getByRole("link", { name: "My items" }).click();
 
     await expect(
       page.getByRole("heading", { name: "My items", exact: true }),
     ).toBeVisible();
 
-    await expect(nav.getByRole("button", { name: "My items" })).toHaveAttribute(
+    await expect(nav.getByRole("link", { name: "My items" })).toHaveAttribute(
       "aria-current",
       "page",
     );
@@ -49,7 +49,7 @@ for (const mobile of [false, true]) {
 
     await page.keyboard.press("Escape");
 
-    await nav.getByRole("button", { name: "Users" }).focus();
+    await nav.getByRole("link", { name: "Users" }).focus();
 
     await page.keyboard.press("Enter");
 
@@ -61,13 +61,13 @@ for (const mobile of [false, true]) {
 
     await expect(page.getByRole("button", { name: "New item" })).toHaveCount(0);
 
-    await nav.getByRole("button", { name: "Overview" }).click();
+    await nav.getByRole("link", { name: "Overview" }).click();
 
     await expect(
       page.getByRole("heading", { name: "Good to see you, Admin." }),
     ).toBeVisible();
 
-    await expect(nav.getByRole("button", { name: "Overview" })).toHaveAttribute(
+    await expect(nav.getByRole("link", { name: "Overview" })).toHaveAttribute(
       "aria-current",
       "page",
     );

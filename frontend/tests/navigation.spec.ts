@@ -8,7 +8,7 @@ test("theme covers dialogs and navigation can collapse", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("button", { name: "Users", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Users", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Toggle dark mode" }).click();
   await expect(page.locator("html")).toHaveClass("app-dark");
   await page.getByRole("button", { name: "New item" }).click();
@@ -24,7 +24,7 @@ test("theme covers dialogs and navigation can collapse", async ({ page }) => {
   await page.getByRole("button", { name: "Toggle navigation" }).click();
   await expect(page.getByRole("navigation", { name: "Workspace" })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.getByRole("button", { name: "My items", exact: true }).click();
+  await page.getByRole("link", { name: "My items", exact: true }).click();
   await page.getByRole("button", { name: "Go to overview" }).click();
   await expect(page.getByRole("heading", { name: "Good to see you, Member." })).toBeVisible();
   const account = page.getByRole("button", { name: "Account", exact: true });
