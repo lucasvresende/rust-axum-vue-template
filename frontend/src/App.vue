@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
+import Button from "primevue/button";
+import Dialog from "primevue/dialog";
 import Toast from "primevue/toast";
 import { useToast } from "primevue/usetoast";
 import { api, session } from "./api";
@@ -23,9 +25,27 @@ const email = ref("admin@example.com"),
     users = ref<User[]>([]),
     title = ref(""),
     description = ref(""),
+    quantity = ref(1),
     dialog = ref(false),
     loading = ref(false),
     dark = ref(false);
+
+const editingItem = ref<Item | null>(null);
+const saving = ref(false);
+const deleting = ref(false);
+const deleteDialog = ref(false);
+const pendingDelete = ref<Item | null>(null);
+function openItem(item: Item | null = null) {
+    editingItem.value = item;
+    title.value = item?.title ?? "";
+    description.value = item?.description ?? "";
+    quantity.value = item?.quantity ?? 1;
+    dialog.value = true;
+}
+function requestDelete(item: Item) {
+    pendingDelete.value = item;
+    deleteDialog.value = true;
+}
 
 const sidebarVisible = ref(true);
 watch(dark, (value) => document.documentElement.classList.toggle("app-dark", value), {
@@ -63,34 +83,51 @@ async function login() {
         loading.value = false;
     }
 }
-async function addItem() {
+async function saveItem() {
+    if (saving.value) return;
+    saving.value = true;
+    const id = editingItem.value?.id;
     try {
-        await api("/items", {
-            method: "POST",
+        await api(id ? `/items/${id}` : "/items", {
+            method: id ? "PUT" : "POST",
             body: JSON.stringify({
                 title: title.value,
                 description: description.value,
+                quantity: quantity.value,
             }),
         });
         title.value = "";
         description.value = "";
+        quantity.value = 1;
         dialog.value = false;
         await load();
-        notify("success", "Item created.");
+        notify("success", id ? "Item updated." : "Item created.");
     } catch (e: any) {
         notify("error", e.message);
+    } finally {
+        saving.value = false;
     }
 }
-async function remove(id: string) {
+async function remove() {
+    if (!pendingDelete.value || deleting.value) return;
+    deleting.value = true;
+    const id = pendingDelete.value.id;
     try {
         await api("/items/" + id, { method: "DELETE" });
+        deleteDialog.value = false;
+        pendingDelete.value = null;
         await load();
         notify("success", "Item deleted.");
     } catch (e: any) {
         notify("error", e.message);
+    } finally {
+        deleting.value = false;
     }
 }
 function logout() {
+    dialog.value = false;
+    deleteDialog.value = false;
+    pendingDelete.value = null;
     activeView.value = "overview";
     session.token = null;
     user.value = null;
@@ -138,7 +175,7 @@ onMounted(async () => {
                     <DashboardHero
                         :user="user"
                         :active-view="activeView"
-                        @create="dialog = true"
+                        @create="openItem()"
                     />
                     <DashboardStats
                         v-if="activeView === 'overview'"
@@ -148,7 +185,8 @@ onMounted(async () => {
                     <ItemsTable
                         v-if="activeView !== 'users'"
                         :items="items"
-                        @remove="remove"
+                        @remove="requestDelete"
+                        @edit="openItem"
                     />
                     <UsersTable
                         v-if="user.is_superuser && activeView !== 'items'"
@@ -161,10 +199,20 @@ onMounted(async () => {
             </div>
         </template>
     </main>
+    <Dialog v-model:visible="deleteDialog" modal header="Delete item" :closable="!deleting" :closeOnEscape="!deleting" class="w-[calc(100vw-2rem)] max-w-md">
+        <p>Delete <strong>{{ pendingDelete?.title }}</strong>? This action cannot be undone.</p>
+        <template #footer>
+            <Button label="Cancel" severity="secondary" outlined autofocus :disabled="deleting" @click="deleteDialog = false" />
+            <Button label="Delete item" severity="danger" :loading="deleting" @click="remove" />
+        </template>
+    </Dialog>
     <CreateItemDialog
         v-model:visible="dialog"
         v-model:title="title"
         v-model:description="description"
-        @submit="addItem"
+        v-model:quantity="quantity"
+        :editing="!!editingItem"
+        :saving="saving"
+        @submit="saveItem"
     />
 </template>

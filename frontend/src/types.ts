@@ -11,6 +11,8 @@ export interface Item {
     title: string;
     description: string;
     owner_id: string;
+    quantity: number;
+    created_at: string;
 }
 
 export type WorkspaceView = "overview" | "items" | "users";

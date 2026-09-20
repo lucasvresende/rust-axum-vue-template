@@ -52,6 +52,8 @@ struct Item {
     title: String,
     description: String,
     owner_id: Uuid,
+    quantity: i32,
+    created_at: chrono::DateTime<Utc>,
 }
 
 #[derive(Deserialize)]
@@ -71,6 +73,7 @@ struct NewUser {
 struct NewItem {
     title: String,
     description: Option<String>,
+    quantity: Option<i32>,
 }
 
 #[derive(Deserialize)]
@@ -288,7 +291,7 @@ async fn items(State(s): State<AppState>, h: axum::http::HeaderMap) -> Result<Js
         sqlx::query_as!(
             Item,
             r#"
-            SELECT id, title, description, owner_id
+            SELECT id, title, description, owner_id, quantity, created_at
             FROM items
             WHERE owner_id = $1
             ORDER BY created_at DESC
@@ -307,23 +310,65 @@ async fn create_item(
 ) -> Result<(StatusCode, Json<Item>)> {
     let u = auth(&h, &s).await?;
 
+    let quantity = b.quantity.unwrap_or(1);
+    if quantity < 0 {
+        return Err(ApiError::Bad("quantity must be a non-negative integer"));
+    }
+
     let i = sqlx::query_as!(
         Item,
         r#"
         INSERT
-        INTO items (id, title, description, owner_id)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id, title, description, owner_id
+        INTO items (id, title, description, owner_id, quantity)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, title, description, owner_id, quantity, created_at
         "#,
         Uuid::new_v4(),
         b.title,
         b.description.unwrap_or_default(),
         u.id,
+        quantity,
     )
     .fetch_one(&s.db)
     .await?;
 
     Ok((StatusCode::CREATED, Json(i)))
+}
+
+#[derive(Deserialize)]
+struct UpdateItem {
+    title: String,
+    description: String,
+    quantity: i32,
+}
+
+async fn update_item(
+    State(s): State<AppState>,
+    h: axum::http::HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(b): Json<UpdateItem>,
+) -> Result<Json<Item>> {
+    let u = auth(&h, &s).await?;
+    if b.quantity < 0 {
+        return Err(ApiError::Bad("quantity must be a non-negative integer"));
+    }
+    let item = sqlx::query_as!(
+        Item,
+        r#"
+        UPDATE items SET title = $1, description = $2, quantity = $3
+        WHERE id = $4 AND owner_id = $5
+        RETURNING id, title, description, owner_id, quantity, created_at
+        "#,
+        b.title,
+        b.description,
+        b.quantity,
+        id,
+        u.id,
+    )
+    .fetch_optional(&s.db)
+    .await?
+    .ok_or(ApiError::NotFound)?;
+    Ok(Json(item))
 }
 
 async fn remove_item(
@@ -405,7 +450,7 @@ async fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         .route("/api/v1/users", post(register).get(users))
         .route("/api/v1/users/me", get(me).put(update_me))
         .route("/api/v1/items", get(items).post(create_item))
-        .route("/api/v1/items/{id}", delete(remove_item))
+        .route("/api/v1/items/{id}", delete(remove_item).put(update_item))
         .layer(
             CorsLayer::new()
                 .allow_origin(origin)

@@ -95,6 +95,8 @@ Styling uses Tailwind CSS v4 via `@tailwindcss/vite` and the official `tailwindc
 
 `frontend/src/style.css` contains the Tailwind imports and shared base styles. The `.app-dark` class is applied to the document root, keeping Tailwind, PrimeVue, and teleported dialogs in sync. No separate Tailwind config file is needed for v4.
 
+Items include a non-negative integer `quantity` (defaults to 1 for existing items and requests that omit it) and a server-generated `created_at` timestamp. The admin table can sort both columns and formats creation dates in the browser's local time. Apply migrations before compiling changed SQLx queries: `cargo sqlx migrate run` with `DATABASE_URL` configured. Startup also runs pending migrations.
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
