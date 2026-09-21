@@ -8,6 +8,23 @@ use crate::{
     state::AppState,
 };
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/users",
+    tag = "Users",
+    summary = "Register a user",
+    request_body = NewUser,
+    responses(
+        (status = 201, description = "Success", body = User),
+        (status = 400, description = "Invalid input or malformed request", content(
+            (crate::error::ErrorResponse = "application/json"),
+            (String = "text/plain")
+        )),
+        (status = 500, description = "Database error", body = crate::error::ErrorResponse),
+        (status = 415, description = "Expected application/json", body = String, content_type = "text/plain"),
+        (status = 422, description = "JSON does not match the request schema", body = String, content_type = "text/plain"),
+    )
+)]
 pub(super) async fn register(
     State(s): State<AppState>,
     Json(b): Json<NewUser>,
@@ -35,10 +52,38 @@ pub(super) async fn register(
     Ok((StatusCode::CREATED, Json(u)))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/users/me",
+    tag = "Users",
+    summary = "Get the current user",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "Success", body = User),
+        (status = 401, description = "Missing or invalid credentials", body = crate::error::ErrorResponse),
+        (status = 500, description = "Database error", body = crate::error::ErrorResponse),
+    )
+)]
 pub(super) async fn me(State(s): State<AppState>, h: axum::http::HeaderMap) -> Result<Json<User>> {
     Ok(Json(auth(&h, &s).await?))
 }
 
+#[utoipa::path(
+    put,
+    path = "/api/v1/users/me",
+    tag = "Users",
+    summary = "Update the current profile",
+    request_body = Profile,
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "Success", body = User),
+        (status = 401, description = "Missing or invalid credentials", body = crate::error::ErrorResponse),
+        (status = 500, description = "Database error", body = crate::error::ErrorResponse),
+        (status = 400, description = "Malformed JSON or invalid input; extractor errors are plain text", body = String, content_type = "text/plain"),
+        (status = 415, description = "Expected application/json", body = String, content_type = "text/plain"),
+        (status = 422, description = "JSON does not match the request schema", body = String, content_type = "text/plain"),
+    )
+)]
 pub(super) async fn update_me(
     State(s): State<AppState>,
     h: axum::http::HeaderMap,
@@ -62,6 +107,19 @@ pub(super) async fn update_me(
     ))
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/users",
+    tag = "Users",
+    summary = "List users (superusers only)",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "Success", body = [User]),
+        (status = 401, description = "Missing or invalid credentials", body = crate::error::ErrorResponse),
+        (status = 403, description = "Superuser access required", body = crate::error::ErrorResponse),
+        (status = 500, description = "Database error", body = crate::error::ErrorResponse),
+    )
+)]
 pub(super) async fn users(
     State(s): State<AppState>,
     h: axum::http::HeaderMap,

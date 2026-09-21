@@ -81,6 +81,21 @@ pub(crate) async fn auth(headers: &axum::http::HeaderMap, state: &AppState) -> R
     .ok_or(ApiError::Unauthorized)
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/login",
+    tag = "Authentication",
+    summary = "Log in and receive a token",
+    request_body = Login,
+    responses(
+        (status = 200, description = "Success", body = Token),
+        (status = 401, description = "Missing or invalid credentials", body = crate::error::ErrorResponse),
+        (status = 500, description = "Database error", body = crate::error::ErrorResponse),
+        (status = 400, description = "Malformed JSON or invalid input; extractor errors are plain text", body = String, content_type = "text/plain"),
+        (status = 415, description = "Expected application/json", body = String, content_type = "text/plain"),
+        (status = 422, description = "JSON does not match the request schema", body = String, content_type = "text/plain"),
+    )
+)]
 pub(crate) async fn login(State(s): State<AppState>, Json(b): Json<Login>) -> Result<Json<Token>> {
     let row = sqlx::query!(
         r#"
