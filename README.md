@@ -1,6 +1,6 @@
-# Axum + SQLx + Vue + PrimeVue template
+# Axum + SQLx + PostgreSQL Vue + PrimeVue + Tailwind CSS template
 
-A modern, deployable equivalent of FastAPI's full-stack template, adapted for Rust and Vue.
+An equivalent of [FastAPI's full-stack template](https://github.com/fastapi/full-stack-fastapi-template), adapted for Rust and Vue.
 
 ## Included
 
