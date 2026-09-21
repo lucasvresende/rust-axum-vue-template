@@ -260,3 +260,7 @@ location / {
 The fallback serves the app without redirecting the browser away from the requested
 page. API errors and missing built assets are not rewritten to HTML. If using a
 static hosting provider, configure its equivalent SPA fallback and API proxy.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
