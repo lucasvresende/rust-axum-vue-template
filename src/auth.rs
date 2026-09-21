@@ -1,0 +1,113 @@
+use argon2::{
+    Argon2,
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+};
+use axum::{Json, extract::State, http::header};
+use chrono::{Duration, Utc};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
+use rand_core::OsRng;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+use crate::{
+    error::{ApiError, Result},
+    models::{Login, Token, User},
+    state::AppState,
+};
+
+#[derive(Serialize, Deserialize)]
+struct Claims {
+    sub: String,
+    exp: usize,
+    superuser: bool,
+}
+
+pub(crate) fn hash(password: &str) -> Result<String> {
+    Argon2::default()
+        .hash_password(password.as_bytes(), &SaltString::generate(&mut OsRng))
+        .map(|p| p.to_string())
+        .map_err(|_| ApiError::Bad("password hashing failed"))
+}
+
+fn password_matches(password: &str, saved: &str) -> bool {
+    PasswordHash::new(saved).ok().is_some_and(|p| {
+        Argon2::default()
+            .verify_password(password.as_bytes(), &p)
+            .is_ok()
+    })
+}
+
+fn jwt(user: &User, secret: &str) -> String {
+    encode(
+        &Header::default(),
+        &Claims {
+            sub: user.id.to_string(),
+            exp: (Utc::now() + Duration::hours(24)).timestamp() as usize,
+            superuser: user.is_superuser,
+        },
+        &EncodingKey::from_secret(secret.as_bytes()),
+    )
+    .expect("JWT encoding")
+}
+
+pub(crate) async fn auth(headers: &axum::http::HeaderMap, state: &AppState) -> Result<User> {
+    let token = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .ok_or(ApiError::Unauthorized)?;
+
+    let claims = decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(state.secret.as_bytes()),
+        &Validation::default(),
+    )
+    .map_err(|_| ApiError::Unauthorized)?
+    .claims;
+
+    let id = Uuid::parse_str(&claims.sub).map_err(|_| ApiError::Unauthorized)?;
+
+    sqlx::query_as!(
+        User,
+        r#"
+        SELECT id, email, full_name, is_active, is_superuser
+        FROM users
+        WHERE id = $1
+        "#,
+        id
+    )
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or(ApiError::Unauthorized)
+}
+
+pub(crate) async fn login(State(s): State<AppState>, Json(b): Json<Login>) -> Result<Json<Token>> {
+    let row = sqlx::query!(
+        r#"
+        SELECT id, email, full_name, is_active, is_superuser, hashed_password
+        FROM users
+        WHERE email = $1
+        "#,
+        b.email.to_lowercase()
+    )
+    .fetch_optional(&s.db)
+    .await?
+    .ok_or(ApiError::Unauthorized)?;
+
+    if !row.is_active || !password_matches(&b.password, &row.hashed_password) {
+        return Err(ApiError::Unauthorized);
+    }
+
+    let u = User {
+        id: row.id,
+        email: row.email,
+        full_name: row.full_name,
+        is_active: row.is_active,
+        is_superuser: row.is_superuser,
+    };
+
+    Ok(Json(Token {
+        access_token: jwt(&u, &s.secret),
+        token_type: "bearer",
+    }))
+}

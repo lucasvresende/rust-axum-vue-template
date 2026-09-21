@@ -160,7 +160,18 @@ Offline metadata supports compilation only; the running API still needs PostgreS
 
 ## Structure
 
-`src/main.rs` contains the intentionally compact reference implementation. Split routes, authentication, models and services into modules as the application grows. `frontend/src/App.vue` is the dashboard shell; `frontend/src/api.ts` centralizes authenticated API calls.
+The backend is organized by responsibility:
+
+- `src/main.rs`: logging, environment configuration, and HTTP server startup.
+- `src/db.rs`: database connection, migrations, and initial superuser creation.
+- `src/state.rs`: shared database pool and JWT secret.
+- `src/routes/mod.rs`: route registration, CORS, and request tracing.
+- `src/routes/health.rs`, `users.rs`, and `items.rs`: health, user, and item handlers.
+- `src/auth.rs`: password hashing, JWT creation and verification, and login.
+- `src/models.rs`: request and response types.
+- `src/error.rs`: shared API errors and HTTP error responses.
+
+`frontend/src/App.vue` is the dashboard shell; `frontend/src/api.ts` centralizes authenticated API calls.
 
 ## Verification
 
