@@ -86,3 +86,7 @@ cd frontend && npm run build && npx playwright test
 - [Axum documentation](https://docs.rs/axum/latest/axum/)
 - [SQLx checked macros and migrations](https://docs.rs/sqlx/latest/sqlx/)
 - [PrimeVue documentation](https://primevue.org/)
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
