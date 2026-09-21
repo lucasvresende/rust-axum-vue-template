@@ -4,6 +4,11 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
+#[derive(serde::Serialize, utoipa::ToSchema)]
+pub(crate) struct ErrorResponse {
+    detail: String,
+}
+
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum ApiError {
     #[error("unauthorized")]
@@ -27,7 +32,13 @@ impl IntoResponse for ApiError {
             Self::Bad(_) => StatusCode::BAD_REQUEST,
             Self::Db(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
-        (code, Json(serde_json::json!({"detail": self.to_string()}))).into_response()
+        (
+            code,
+            Json(ErrorResponse {
+                detail: self.to_string(),
+            }),
+        )
+            .into_response()
     }
 }
 

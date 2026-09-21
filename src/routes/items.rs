@@ -12,6 +12,18 @@ use crate::{
     state::AppState,
 };
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/items",
+    tag = "Items",
+    summary = "List your items",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "Success", body = [Item]),
+        (status = 401, description = "Missing or invalid credentials", body = crate::error::ErrorResponse),
+        (status = 500, description = "Database error", body = crate::error::ErrorResponse),
+    )
+)]
 pub(super) async fn items(
     State(s): State<AppState>,
     h: axum::http::HeaderMap,
@@ -34,6 +46,25 @@ pub(super) async fn items(
     ))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/v1/items",
+    tag = "Items",
+    summary = "Create an item",
+    request_body = NewItem,
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 201, description = "Success", body = Item),
+        (status = 401, description = "Missing or invalid credentials", body = crate::error::ErrorResponse),
+        (status = 400, description = "Invalid input or malformed request", content(
+            (crate::error::ErrorResponse = "application/json"),
+            (String = "text/plain")
+        )),
+        (status = 500, description = "Database error", body = crate::error::ErrorResponse),
+        (status = 415, description = "Expected application/json", body = String, content_type = "text/plain"),
+        (status = 422, description = "JSON does not match the request schema", body = String, content_type = "text/plain"),
+    )
+)]
 pub(super) async fn create_item(
     State(s): State<AppState>,
     h: axum::http::HeaderMap,
@@ -66,6 +97,27 @@ pub(super) async fn create_item(
     Ok((StatusCode::CREATED, Json(i)))
 }
 
+#[utoipa::path(
+    put,
+    path = "/api/v1/items/{id}",
+    tag = "Items",
+    summary = "Update an item you own",
+    request_body = UpdateItem,
+    params(("id" = Uuid, Path, description = "Item ID")),
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "Success", body = Item),
+        (status = 401, description = "Missing or invalid credentials", body = crate::error::ErrorResponse),
+        (status = 400, description = "Invalid input or malformed request", content(
+            (crate::error::ErrorResponse = "application/json"),
+            (String = "text/plain")
+        )),
+        (status = 404, description = "Item not found or owned by another user", body = crate::error::ErrorResponse),
+        (status = 500, description = "Database error", body = crate::error::ErrorResponse),
+        (status = 415, description = "Expected application/json", body = String, content_type = "text/plain"),
+        (status = 422, description = "JSON does not match the request schema", body = String, content_type = "text/plain"),
+    )
+)]
 pub(super) async fn update_item(
     State(s): State<AppState>,
     h: axum::http::HeaderMap,
@@ -95,6 +147,21 @@ pub(super) async fn update_item(
     Ok(Json(item))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/v1/items/{id}",
+    tag = "Items",
+    summary = "Delete an item you own",
+    params(("id" = Uuid, Path, description = "Item ID")),
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 400, description = "Invalid item UUID", body = String, content_type = "text/plain"),
+        (status = 204, description = "Success"),
+        (status = 401, description = "Missing or invalid credentials", body = crate::error::ErrorResponse),
+        (status = 404, description = "Item not found or owned by another user", body = crate::error::ErrorResponse),
+        (status = 500, description = "Database error", body = crate::error::ErrorResponse),
+    )
+)]
 pub(super) async fn remove_item(
     State(s): State<AppState>,
     h: axum::http::HeaderMap,

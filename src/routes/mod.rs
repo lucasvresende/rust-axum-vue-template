@@ -1,3 +1,4 @@
+mod docs;
 mod health;
 mod items;
 mod users;
@@ -24,6 +25,7 @@ pub(crate) fn router(state: AppState, origin: HeaderValue) -> Router {
         .route("/api/v1/users/me", get(me).put(update_me))
         .route("/api/v1/items", get(items).post(create_item))
         .route("/api/v1/items/{id}", delete(remove_item).put(update_item))
+        .merge(docs::router())
         .layer(
             CorsLayer::new()
                 .allow_origin(origin)

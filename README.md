@@ -1,4 +1,4 @@
-# Axum + SQLx + PostgreSQL Vue + PrimeVue + Tailwind CSS template
+# Axum + SQLx + PostgreSQL Vue + PrimeVue + Sakai + Tailwind CSS template
 
 An equivalent of [FastAPI's full-stack template](https://github.com/fastapi/full-stack-fastapi-template), adapted for Rust and Vue.
 
@@ -37,6 +37,27 @@ npm run dev
 ```
 
 Open `http://localhost:5173`. The initial login is `admin@example.com` / `changethis`; replace this configuration before deployment. Mailpit is available at `http://localhost:8025`.
+
+## Interactive API documentation
+
+With the API running on its default port, open [Swagger UI](http://localhost:8000/docs/).
+The [OpenAPI JSON specification](http://localhost:8000/api-docs/openapi.json) is also served by Axum.
+Use the configured API port if `APP_ADDR` differs. These documentation routes are public.
+
+To try authenticated requests:
+
+1. Expand `POST /api/v1/login`, click **Try it out**, and submit your email and password as JSON.
+2. Copy `access_token` from the response.
+3. Click **Authorize**, paste the token without the `Bearer ` prefix, and confirm.
+4. Execute the user and item endpoints. Listing all users requires a superuser account.
+
+OpenAPI schemas are derived from `src/models.rs`; endpoint documentation lives beside the handlers.
+`src/routes/docs.rs` collects the endpoints and defines JWT bearer authentication.
+When adding a route, annotate its handler with `#[utoipa::path(...)]` and add it to the `ApiDoc` paths list.
+Swagger UI assets are bundled through the `vendored` feature, so the running server does not depend on a CDN.
+
+When serving behind a reverse proxy, forward `/docs`, `/docs/`, and `/api-docs/` to Axum
+alongside `/api/`; otherwise the frontend SPA fallback will intercept documentation requests.
 
 ## Migration workflow
 
@@ -166,6 +187,7 @@ The backend is organized by responsibility:
 - `src/db.rs`: database connection, migrations, and initial superuser creation.
 - `src/state.rs`: shared database pool and JWT secret.
 - `src/routes/mod.rs`: route registration, CORS, and request tracing.
+- `src/routes/docs.rs`: OpenAPI specification and Swagger UI.
 - `src/routes/health.rs`, `users.rs`, and `items.rs`: health, user, and item handlers.
 - `src/auth.rs`: password hashing, JWT creation and verification, and login.
 - `src/models.rs`: request and response types.
