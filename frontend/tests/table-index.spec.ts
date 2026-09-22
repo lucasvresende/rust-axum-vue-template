@@ -30,7 +30,7 @@ for (const view of ["My items", "Users"]) {
     await page.getByRole("button", { name: "Sign in" }).click();
     await page
       .getByRole("navigation", { name: "Workspace" })
-      .getByRole("button", { name: view, exact: true })
+      .getByRole("link", { name: view, exact: true })
       .click();
     const table = page.getByRole("table");
     const indexes = table.locator("tbody tr td:first-child");
