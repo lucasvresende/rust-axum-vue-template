@@ -223,11 +223,13 @@ onMounted(async () => {
       <div
         class="mx-auto flex max-w-[1600px] flex-col gap-6 p-4 lg:flex-row lg:p-8"
       >
-        <WorkspaceNav
-          v-if="sidebarVisible"
-          :active-view="activeView"
-          :is-superuser="user.is_superuser"
-        />
+        <Transition name="workspace-drawer">
+          <WorkspaceNav
+            v-if="sidebarVisible"
+            :active-view="activeView"
+            :is-superuser="user.is_superuser"
+          />
+        </Transition>
         <section class="min-w-0 flex-1 space-y-6">
           <DashboardHero
             :user="user"

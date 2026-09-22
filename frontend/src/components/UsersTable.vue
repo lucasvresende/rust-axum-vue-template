@@ -1,40 +1,35 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import Card from "primevue/card";
-import DataTable from "primevue/datatable";
-import Column from "primevue/column";
-import type { User } from "../types";
+import WorkspaceTable from "./WorkspaceTable.vue";
+import type { User, TableColumn } from "../types";
 
 const props = defineProps<{ users: User[] }>();
 const indexedRows = computed(() =>
-  props.users.map((row, index) => ({ ...row, rowIndex: index + 1 })),
+  props.users.map((row, index) => ({
+    ...row,
+    rowIndex: index + 1,
+    role: row.is_superuser ? "Admin" : "Member",
+  })),
 );
-const first = ref(0);
+const columns: TableColumn[] = [
+  { field: "rowIndex", header: "#", filterType: "number" },
+  { field: "full_name", header: "Name" },
+  { field: "email", header: "Email" },
+  { field: "role", header: "Role" },
+];
 </script>
 
 <template>
   <Card class="overflow-hidden rounded-2xl border border-surface shadow-none">
     <template #title>Users</template>
     <template #content>
-      <DataTable
-        v-model:first="first"
-        :value="indexedRows"
-        paginator
-        :rows="10"
-        :rowsPerPageOptions="[5, 10, 20]"
-        dataKey="id"
-        scrollable
-      >
-        <template #empty>No workspace members found.</template>
-        <Column field="rowIndex" header="#" class="w-16" sortable />
-        <Column field="full_name" header="Name" sortable />
-        <Column field="email" header="Email" sortable />
-        <Column header="Role">
-          <template #body="s">
-            {{ s.data.is_superuser ? "Admin" : "Member" }}
-          </template>
-        </Column>
-      </DataTable>
+      <WorkspaceTable
+        :rows="indexedRows"
+        :columns="columns"
+        name="users"
+        empty="No workspace members found."
+      />
     </template>
   </Card>
 </template>

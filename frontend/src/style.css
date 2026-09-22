@@ -11,3 +11,47 @@
     @apply cursor-pointer;
   }
 }
+
+/* Keep the inline drawer in the layout during both directions of travel. */
+.workspace-drawer-enter-active,
+.workspace-drawer-leave-active {
+  overflow: hidden;
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease,
+    max-height 220ms ease,
+    max-width 220ms ease,
+    padding 220ms ease,
+    margin 220ms ease;
+  max-height: 12rem;
+}
+.workspace-drawer-enter-from,
+.workspace-drawer-leave-to {
+  opacity: 0;
+  transform: translateY(-0.75rem);
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-bottom: -1.5rem;
+}
+@media (min-width: 1024px) {
+  .workspace-drawer-enter-active,
+  .workspace-drawer-leave-active {
+    max-height: none;
+    max-width: 16rem;
+  }
+  .workspace-drawer-enter-from,
+  .workspace-drawer-leave-to {
+    transform: translateX(-1rem);
+    max-width: 0;
+    padding: 1.25rem 0;
+    margin-bottom: 0;
+    margin-right: -1.5rem;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-drawer-enter-active,
+  .workspace-drawer-leave-active {
+    transition-duration: 0s;
+  }
+}

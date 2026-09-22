@@ -35,7 +35,10 @@ test("item creation sends quantity and displays server creation date", async ({
   await expect(page.getByRole("spinbutton", { name: "Quantity" })).toHaveValue(
     "1",
   );
-  await page.getByLabel("Title", { exact: true }).fill("Bolts");
+  await page
+    .getByRole("dialog")
+    .getByRole("textbox", { name: "Title", exact: true })
+    .fill("Bolts");
   await page.getByRole("spinbutton", { name: "Quantity" }).fill("12");
   await page.getByRole("button", { name: "Create item", exact: true }).click();
   const row = page.getByRole("row").filter({ hasText: "Bolts" });

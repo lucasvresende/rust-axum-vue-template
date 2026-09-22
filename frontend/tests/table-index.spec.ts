@@ -35,7 +35,7 @@ for (const view of ["My items", "Users"]) {
     const table = page.getByRole("table");
     const indexes = table.locator("tbody tr td:first-child");
     const header = table.getByRole("columnheader", { name: "#", exact: true });
-    await header.click();
+    await header.locator(".p-datatable-column-title").click();
     await expect(header).toHaveAttribute("aria-sort", "ascending");
     await expect(indexes).toHaveText([
       "1",
@@ -49,7 +49,7 @@ for (const view of ["My items", "Users"]) {
       "9",
       "10",
     ]);
-    await header.click();
+    await header.locator(".p-datatable-column-title").click();
     await expect(header).toHaveAttribute("aria-sort", "descending");
     await expect(indexes).toHaveText([
       "12",

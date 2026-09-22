@@ -16,3 +16,11 @@ export interface Item {
 }
 
 export type WorkspaceView = "overview" | "items" | "users";
+
+export interface TableColumn {
+  field: string;
+  header: string;
+  sortField?: string;
+  filterField?: string;
+  filterType?: "text" | "number" | "date";
+}

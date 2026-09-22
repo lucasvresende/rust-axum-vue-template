@@ -24,11 +24,12 @@ const actions = [
 
 <template>
   <Button
-    label="Actions"
-    icon="pi pi-chevron-down"
-    iconPos="right"
+    icon="pi pi-ellipsis-h"
+    rounded
+    text
+    size="small"
+    :title="`Actions for ${item.title}`"
     severity="secondary"
-    outlined
     :aria-label="`Actions for ${item.title}`"
     aria-haspopup="menu"
     :aria-controls="`item-actions-${item.id}`"

@@ -53,7 +53,10 @@ test("edit item and require confirmation before deleting", async ({ page }) => {
   await page.goto("/");
 
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.getByRole("button", { name: "Actions for Bolts" }).click();
+  const actions = page.getByRole("button", { name: "Actions for Bolts" });
+  await actions.focus();
+  await page.keyboard.press("Enter");
+  await expect(actions).toHaveAttribute("aria-expanded", "true");
   await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
   const edit = page.getByRole("dialog", { name: "Edit item" });
 
