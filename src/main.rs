@@ -5,6 +5,9 @@ mod models;
 mod routes;
 mod state;
 
+#[cfg(test)]
+mod tests;
+
 use axum::http::HeaderValue;
 use std::{env, net::SocketAddr, sync::Arc};
 use tracing::info;

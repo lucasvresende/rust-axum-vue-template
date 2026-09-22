@@ -16,6 +16,7 @@ use crate::{
     request_body = NewUser,
     responses(
         (status = 201, description = "Success", body = User),
+        (status = 409, description = "Email already registered", body = crate::error::ErrorResponse),
         (status = 400, description = "Invalid input or malformed request", content(
             (crate::error::ErrorResponse = "application/json"),
             (String = "text/plain")
@@ -47,7 +48,15 @@ pub(super) async fn register(
         b.full_name.unwrap_or_default(),
     )
     .fetch_one(&s.db)
-    .await?;
+    .await
+    .map_err(|error| match &error {
+        sqlx::Error::Database(db)
+            if db.is_unique_violation() && db.constraint() == Some("users_email_key") =>
+        {
+            ApiError::Conflict
+        }
+        _ => ApiError::Db(error),
+    })?;
 
     Ok((StatusCode::CREATED, Json(u)))
 }

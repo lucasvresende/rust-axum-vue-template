@@ -72,7 +72,7 @@ pub(crate) async fn auth(headers: &axum::http::HeaderMap, state: &AppState) -> R
         r#"
         SELECT id, email, full_name, is_active, is_superuser
         FROM users
-        WHERE id = $1
+        WHERE id = $1 AND is_active = TRUE
         "#,
         id
     )
@@ -125,4 +125,22 @@ pub(crate) async fn login(State(s): State<AppState>, Json(b): Json<Login>) -> Re
         access_token: jwt(&u, &s.secret),
         token_type: "bearer",
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{hash, password_matches};
+
+    #[test]
+    fn passwords_are_salted_and_verified_safely() {
+        let password = "a sufficiently long password";
+        let first = hash(password).unwrap();
+        let second = hash(password).unwrap();
+        assert_ne!(first, second);
+        assert!(password_matches(password, &first));
+        assert!(password_matches(password, &second));
+        assert!(!password_matches("wrong password", &first));
+        assert!(!password_matches(password, "malformed hash"));
+        assert!(!password_matches(password, ""));
+    }
 }
