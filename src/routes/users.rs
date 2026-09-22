@@ -8,6 +8,7 @@ use crate::{
     state::AppState,
 };
 
+/// Register a non-admin account with a lowercase email and a password of at least 12 bytes.
 #[utoipa::path(
     post,
     path = "/api/v1/users",
@@ -61,6 +62,7 @@ pub(super) async fn register(
     Ok((StatusCode::CREATED, Json(u)))
 }
 
+/// Return the current active user without exposing password data.
 #[utoipa::path(
     get,
     path = "/api/v1/users/me",
@@ -77,6 +79,7 @@ pub(super) async fn me(State(s): State<AppState>, h: axum::http::HeaderMap) -> R
     Ok(Json(auth(&h, &s).await?))
 }
 
+/// Update only the authenticated user’s display name.
 #[utoipa::path(
     put,
     path = "/api/v1/users/me",
@@ -116,6 +119,7 @@ pub(super) async fn update_me(
     ))
 }
 
+/// List users newest first after checking the caller’s current superuser permission.
 #[utoipa::path(
     get,
     path = "/api/v1/users",

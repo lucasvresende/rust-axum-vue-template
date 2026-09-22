@@ -1,1 +1,1 @@
-{"root":["./src/api.ts","./src/main.ts","./src/App.vue"],"version":"5.9.3"}
+{"root":["./src/api.ts","./src/main.ts","./src/router.ts","./src/types.ts","./src/App.vue","./src/components/AppHeader.vue","./src/components/CreateItemDialog.vue","./src/components/DashboardHero.vue","./src/components/DashboardStats.vue","./src/components/ItemActions.vue","./src/components/ItemsTable.vue","./src/components/LoginForm.vue","./src/components/UsersTable.vue","./src/components/WorkspaceNav.vue"],"version":"5.9.3"}

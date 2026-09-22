@@ -1,5 +1,6 @@
 const base = "/api/v1";
 
+/** Persist the bearer token across reloads; assigning null clears it. */
 export const session = {
   get token() {
     return localStorage.getItem("token");
@@ -9,7 +10,14 @@ export const session = {
   },
 };
 
-export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+/**
+ * Send an API request with the stored bearer token and caller-supplied options.
+ * Reject failed requests with the API detail; successful 204 responses return undefined.
+ */
+export async function api<T>(
+  path: string,
+  options: RequestInit = {},
+): Promise<T> {
   const res = await fetch(base + path, {
     ...options,
     headers: {

@@ -12,6 +12,7 @@ use crate::{
     state::AppState,
 };
 
+/// List only the authenticated user’s items, newest first.
 #[utoipa::path(
     get,
     path = "/api/v1/items",
@@ -46,6 +47,7 @@ pub(super) async fn items(
     ))
 }
 
+/// Create an owned item, defaulting omitted quantity to one and description to empty.
 #[utoipa::path(
     post,
     path = "/api/v1/items",
@@ -97,6 +99,9 @@ pub(super) async fn create_item(
     Ok((StatusCode::CREATED, Json(i)))
 }
 
+/// Replace editable item fields after validating quantity and matching ownership.
+///
+/// Missing items and items owned by someone else both return not found.
 #[utoipa::path(
     put,
     path = "/api/v1/items/{id}",
@@ -147,6 +152,7 @@ pub(super) async fn update_item(
     Ok(Json(item))
 }
 
+/// Delete an owned item, returning not found for missing or differently owned items.
 #[utoipa::path(
     delete,
     path = "/api/v1/items/{id}",

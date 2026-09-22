@@ -17,6 +17,7 @@ use self::{
 };
 use crate::{auth::login, state::AppState};
 
+/// Assemble API and documentation routes with shared state, CORS, and request tracing.
 pub(crate) fn router(state: AppState, origin: HeaderValue) -> Router {
     Router::new()
         .route("/api/v1/health", get(health))

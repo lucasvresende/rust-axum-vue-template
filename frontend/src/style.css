@@ -4,10 +4,10 @@
 @custom-variant dark (&:where(.app-dark, .app-dark *));
 
 @layer base {
-    body {
-        @apply m-0 bg-surface-50 font-sans text-surface-900 antialiased dark:bg-surface-950 dark:text-surface-0;
-    }
-    button {
-        @apply cursor-pointer;
-    }
+  body {
+    @apply m-0 bg-surface-50 font-sans text-surface-900 antialiased dark:bg-surface-950 dark:text-surface-0;
+  }
+  button {
+    @apply cursor-pointer;
+  }
 }

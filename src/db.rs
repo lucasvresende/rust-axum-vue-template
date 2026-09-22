@@ -6,6 +6,10 @@ use crate::auth::hash;
 
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
 
+/// Connect using `DATABASE_URL`, apply embedded migrations, and bootstrap an administrator.
+///
+/// An existing account with the configured email is left unchanged; changing the
+/// bootstrap environment variables does not reset its password or permissions.
 pub(crate) async fn initialize() -> Result<PgPool, Box<dyn std::error::Error>> {
     let db = PgPoolOptions::new()
         .max_connections(10)

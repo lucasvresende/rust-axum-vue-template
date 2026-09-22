@@ -2,6 +2,7 @@ use axum::Json;
 
 use crate::models::Health;
 
+/// Report HTTP service liveness without querying the database.
 #[utoipa::path(
     get,
     path = "/api/v1/health",

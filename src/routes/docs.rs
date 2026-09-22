@@ -50,6 +50,7 @@ impl Modify for BearerAuth {
     }
 }
 
+/// Serve the public OpenAPI specification and locally bundled Swagger UI assets.
 pub(super) fn router() -> Router<AppState> {
     SwaggerUi::new("/docs")
         .url("/api-docs/openapi.json", ApiDoc::openapi())

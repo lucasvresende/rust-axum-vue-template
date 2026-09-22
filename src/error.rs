@@ -26,6 +26,7 @@ pub(crate) enum ApiError {
 }
 
 impl IntoResponse for ApiError {
+    /// Map API errors to HTTP responses while keeping database details in server logs.
     fn into_response(self) -> Response {
         let code = match self {
             Self::Unauthorized => StatusCode::UNAUTHORIZED,

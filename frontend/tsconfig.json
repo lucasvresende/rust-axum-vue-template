@@ -6,7 +6,7 @@
     "strict": true,
     "jsx": "preserve",
     "skipLibCheck": true,
-    "noEmit": true,
+    "noEmit": true
   },
-  "include": ["src/**/*.ts", "src/**/*.vue"],
+  "include": ["src/**/*.ts", "src/**/*.vue"]
 }

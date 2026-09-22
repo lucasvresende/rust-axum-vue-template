@@ -1,44 +1,141 @@
-# Axum + SQLx + PostgreSQL Vue + PrimeVue + Sakai + Tailwind CSS template
+# Axum + Vue full-stack template
 
-An equivalent of [FastAPI's full-stack template](https://github.com/fastapi/full-stack-fastapi-template), adapted for Rust and Vue.
+A Rust and Vue starting point inspired by [FastAPI’s full-stack template](https://github.com/fastapi/full-stack-fastapi-template). It combines an authenticated JSON API with an admin workspace for managing personal inventory and viewing users.
 
-## Included
+## Contents
 
-- **Axum 0.8** API with CORS, request tracing, typed JSON, error responses, health endpoint and JWT authentication.
-- **SQLx 0.9** PostgreSQL access using `query!` / `query_as!` compile-time macros, embedded SQLx migrations, and a stable-Rust `build.rs` migration watcher.
-- Secure **Argon2id** passwords, bootstrap superuser, self-service registration, current-user profile, admin users view, and ownership-safe items CRUD.
-- **Vue 3.5**, Vite and **PrimeVue 4.5** (Aura preset), responsive dashboard, dark mode, toast feedback and keyboard-friendly components. This is the latest open-source PrimeVue line; PrimeVue 5 requires a PrimeUI license key and renders a license overlay without one.
-- PostgreSQL 18 and Mailpit Docker development services; Playwright browser test and screenshot artifact.
+- [What is included](#what-is-included)
+- [Prerequisites](#prerequisites)
+- [Local development](#local-development)
+- [Configuration](#configuration)
+- [API and authentication](#api-and-authentication)
+- [Project structure](#project-structure)
+- [Frontend development](#frontend-development)
+- [Database migrations](#database-migrations)
+- [Compile-time SQL verification](#compile-time-sql-verification)
+- [Formatting and testing](#formatting-and-testing)
+- [Production hosting](#production-hosting)
+- [Troubleshooting](#troubleshooting)
+- [References](#references)
 
-## Run locally
+## What is included
+
+- **Axum 0.8** API with typed JSON, JWT authentication, CORS, request tracing, and Swagger UI.
+- **SQLx 0.9 and PostgreSQL 18**, compile-time checked queries, and embedded migrations.
+- **Argon2id** password hashing, bootstrap administrator, registration, profile updates, and an admin-only user directory.
+- Items with owner-scoped create, read, update, and delete operations, quantities, and creation timestamps.
+- **Vue 3.5, Vite, PrimeVue 4.5 (Aura), and Tailwind CSS 4**, with a Sakai-inspired responsive workspace, dark mode, and toast feedback.
+- Rust API tests and Playwright browser tests; Docker Compose services for PostgreSQL and Mailpit.
+
+Mailpit is supplied for future email development. The API does not currently send mail or implement password-reset endpoints.
+
+## Prerequisites
+
+- Rust and Cargo supporting edition 2024; the crate declares Rust 1.88 as its minimum version.
+- Node.js compatible with the locked Vite version (Node 22.12+ on the 22.x line is a suitable baseline) and npm.
+- Docker Engine with the Compose plugin, or an independently provisioned PostgreSQL server.
+- The SQLx CLI matching the backend’s 0.9 release.
+
+Commands below use Bash and start from the repository root unless stated otherwise.
+
+## Local development
+
+### 1. Configure and start the database
 
 ```bash
-cd /path/to/rust-axum-vue-template
 cp .env.example .env
 docker compose up -d db mailpit
-set -a; source .env; set +a
+docker compose ps
+```
+
+Copy the environment file only on first setup so existing configuration is preserved. Wait for the database to report healthy. Compose exposes PostgreSQL on host port **55432**, avoiding the usual local PostgreSQL port.
+
+Export the configuration into the shell that will run Cargo:
+
+```bash
+set -a
+source .env
+set +a
+```
+
+The API reads process environment variables; it does not load `.env` itself. SQLx tooling can read `.env`, but that does not configure the running API process.
+
+### 2. Apply migrations and run the API
+
+Install the CLI once, then migrate before the first compilation:
+
+```bash
 cargo install sqlx-cli --version 0.9.0 --locked --no-default-features --features rustls,postgres
 cargo sqlx migrate run
 cargo run
 ```
 
-If port 8000 is already used, run on another port (and set the matching Vite proxy target):
+SQLx checks queries against the database during compilation. Startup also applies embedded migrations and creates the configured administrator if its email does not already exist.
+
+### 3. Start the frontend
+
+In a second terminal, from the repository root:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Open [the workspace](http://localhost:5173). Development credentials are `admin@example.com` / `changethis`, unless changed in `.env`. The login form is prefilled with those defaults; enter your configured credentials if they differ.
+
+| Service    | Local address                       | Purpose                           |
+| ---------- | ----------------------------------- | --------------------------------- |
+| Workspace  | http://localhost:5173               | Vue development server            |
+| API health | http://localhost:8000/api/v1/health | HTTP liveness response            |
+| Swagger UI | http://localhost:8000/docs/         | Interactive API documentation     |
+| Mailpit    | http://localhost:8025               | Development email inbox           |
+| PostgreSQL | localhost:55432                     | Database connection from the host |
+| SMTP       | localhost:1025                      | Mailpit SMTP listener             |
+
+Stop the API and Vite with Ctrl+C. Use `docker compose stop` to stop the development services while keeping their containers.
+
+## Configuration
+
+| Variable                   | Example/default                                            | Meaning                                                         |
+| -------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------- |
+| `DATABASE_URL`             | `postgres://app:app@localhost:55432/app` in `.env.example` | Required database URL; used at build time and runtime.          |
+| `APP_ADDR`                 | `0.0.0.0:8000`                                             | API bind address and port.                                      |
+| `JWT_SECRET`               | Development fallback if unset                              | Signing secret; configure a strong unique value for deployment. |
+| `FRONTEND_ORIGIN`          | `http://localhost:5173`                                    | Single browser origin allowed by CORS.                          |
+| `FIRST_SUPERUSER_EMAIL`    | `admin@example.com`                                        | Email used when creating the initial administrator.             |
+| `FIRST_SUPERUSER_PASSWORD` | `changethis`                                               | Password used only when that account is first created.          |
+| `SMTP_HOST`, `SMTP_PORT`   | `mailpit`, `1025` in `.env.example`                        | Reserved email settings; currently unused by the API.           |
+
+Changing bootstrap credentials does not update an existing account. Use a lowercase administrator email, because login normalizes email addresses to lowercase. `mailpit` is a Compose network hostname; a future mail client running on the host would use `localhost:1025`.
+
+To use another API port:
 
 ```bash
 APP_ADDR=0.0.0.0:8001 cargo run
 ```
 
-In a second terminal:
+Also update the `/api` proxy target in `frontend/vite.config.ts` and restart Vite. If changing the frontend origin, update `FRONTEND_ORIGIN` and restart the API.
 
-```bash
-cd frontend
-npm install
-npm run dev
-```
+## API and authentication
 
-Open `http://localhost:5173`. The initial login is `admin@example.com` / `changethis`; replace this configuration before deployment. Mailpit is available at `http://localhost:8025`.
+All application endpoints use the `/api/v1` prefix.
 
-## Interactive API documentation
+| Method       | Path          | Access and behavior                                           |
+| ------------ | ------------- | ------------------------------------------------------------- |
+| GET          | `/health`     | Public liveness check; does not query PostgreSQL.             |
+| POST         | `/login`      | Public; exchange email/password for a bearer token.           |
+| POST         | `/users`      | Public registration; password must contain at least 12 bytes. |
+| GET          | `/users`      | Active superusers only; list users.                           |
+| GET / PUT    | `/users/me`   | Active user; read profile or update `full_name`.              |
+| GET / POST   | `/items`      | Active user; list owned items or create an item.              |
+| PUT / DELETE | `/items/{id}` | Active owner; update or delete an item.                       |
+
+Tokens expire after 24 hours. Every authenticated request reloads the active user from PostgreSQL, so deactivation and permission changes take effect without waiting for token expiry. Even superusers see and modify only their own items. Missing items and items owned by another user both return 404.
+
+The frontend stores the bearer token in local storage and removes it on logout. API errors normally use `{ "detail": "..." }`; Axum request-extraction errors can be plain text. A successful item deletion returns 204 with no response body.
+
+### Interactive documentation
 
 With the API running on its default port, open [Swagger UI](http://localhost:8000/docs/).
 The [OpenAPI JSON specification](http://localhost:8000/api-docs/openapi.json) is also served by Axum.
@@ -59,7 +156,43 @@ Swagger UI assets are bundled through the `vendored` feature, so the running ser
 When serving behind a reverse proxy, forward `/docs`, `/docs/`, and `/api-docs/` to Axum
 alongside `/api/`; otherwise the frontend SPA fallback will intercept documentation requests.
 
-## Migration workflow
+## Project structure
+
+The backend is organized by responsibility:
+
+- `src/main.rs`: logging, environment configuration, and HTTP server startup.
+- `src/db.rs`: database connection, migrations, and initial superuser creation.
+- `src/state.rs`: shared database pool and JWT secret.
+- `src/routes/mod.rs`: route registration, CORS, and request tracing.
+- `src/routes/docs.rs`: OpenAPI specification and Swagger UI.
+- `src/routes/health.rs`, `users.rs`, and `items.rs`: health, user, and item handlers.
+- `src/auth.rs`: password hashing, JWT creation and verification, and login.
+- `src/models.rs`: request and response types.
+- `src/error.rs`: shared API errors and HTTP error responses.
+
+`frontend/src/App.vue` is the dashboard shell; `frontend/src/api.ts` centralizes authenticated API calls.
+
+Other important files:
+
+- `frontend/src/router.ts`: workspace routes and token-presence navigation guards.
+- `frontend/src/components/`: reusable forms, tables, navigation, and dialogs.
+- `frontend/src/types.ts`: frontend user and item types.
+- `frontend/tests/` and `frontend/playwright.config.ts`: browser tests and development-server setup.
+- `src/tests.rs`: in-process API and database integration tests.
+- `migrations/`: versioned SQL schema changes; applied files must remain unchanged.
+- `.env.example` and `docker-compose.yml`: local configuration and supporting services.
+
+## Frontend development
+
+The login, overview, inventory, and users templates follow [Sakai's official layout](https://github.com/primefaces/sakai-vue/tree/master/src/layout) and [dashboard examples](https://github.com/primefaces/sakai-vue/tree/master/src/components/dashboard), adapted to the existing API data. Navigation can be collapsed from the topbar and stacks above the content on small screens.
+
+Styling uses Tailwind CSS v4 via `@tailwindcss/vite` and the official `tailwindcss-primeui` integration. Add utility classes directly to Vue templates; semantic utilities such as `bg-primary`, `border-surface`, and `text-muted-color` follow the Aura theme. PrimeVue controls retain their Aura styling, with the `primevue` CSS layer before Tailwind utilities so utilities can override controls. See the [official PrimeVue Tailwind guide](https://primevue.org/tailwind/).
+
+`frontend/src/style.css` contains the Tailwind imports and shared base styles. The `.app-dark` class is applied to the document root, keeping Tailwind, PrimeVue, and teleported dialogs in sync. No separate Tailwind config file is needed for v4.
+
+Items include a non-negative integer `quantity` (defaults to 1 for existing items and requests that omit it) and a server-generated `created_at` timestamp. The admin table can sort both columns and formats creation dates in the browser's local time. Apply migrations before compiling changed SQLx queries: `cargo sqlx migrate run` with `DATABASE_URL` configured. Startup also runs pending migrations.
+
+## Database migrations
 
 Run these commands from the repository root. The project uses SQLx 0.9, PostgreSQL, and versioned SQL files in `migrations/`. See the [SQLx CLI documentation](https://github.com/transact-rs/sqlx/blob/v0.9.0/sqlx-cli/README.md).
 
@@ -179,49 +312,76 @@ cargo sqlx prepare --check
 
 Offline metadata supports compilation only; the running API still needs PostgreSQL and applies its embedded migrations at startup.
 
-## Structure
+## Formatting and testing
 
-The backend is organized by responsibility:
+### Formatting
 
-- `src/main.rs`: logging, environment configuration, and HTTP server startup.
-- `src/db.rs`: database connection, migrations, and initial superuser creation.
-- `src/state.rs`: shared database pool and JWT secret.
-- `src/routes/mod.rs`: route registration, CORS, and request tracing.
-- `src/routes/docs.rs`: OpenAPI specification and Swagger UI.
-- `src/routes/health.rs`, `users.rs`, and `items.rs`: health, user, and item handlers.
-- `src/auth.rs`: password hashing, JWT creation and verification, and login.
-- `src/models.rs`: request and response types.
-- `src/error.rs`: shared API errors and HTTP error responses.
-
-`frontend/src/App.vue` is the dashboard shell; `frontend/src/api.ts` centralizes authenticated API calls.
-
-## Verification
+Use rustfmt for Rust and the pinned Prettier dependency for frontend code, templates, styles, and configuration:
 
 ```bash
-set -a; source .env; set +a
-cargo sqlx migrate run
-cargo check
-cd frontend && npm run build && npx playwright test
+cargo fmt --all
+cd frontend
+npm run format
 ```
 
-## References
+Check formatting without modifying files:
 
-- [Upstream FastAPI template](https://github.com/fastapi/full-stack-fastapi-template)
-- [Axum documentation](https://docs.rs/axum/latest/axum/)
-- [SQLx checked macros and migrations](https://docs.rs/sqlx/latest/sqlx/)
-- [PrimeVue documentation](https://primevue.org/)
+```bash
+cargo fmt --all -- --check
+cd frontend
+npm run format:check
+```
 
-## Admin UI and Tailwind
+The frontend uses two-space indentation, semicolons, and double-quoted JavaScript strings. Generated output, dependency files, and TypeScript build metadata are excluded from Prettier. Do not reformat applied SQL migrations: their checksums are recorded by SQLx.
 
-The login, overview, inventory, and users templates follow [Sakai's official layout](https://github.com/primefaces/sakai-vue/tree/master/src/layout) and [dashboard examples](https://github.com/primefaces/sakai-vue/tree/master/src/components/dashboard), adapted to the existing API data. Navigation can be collapsed from the topbar and stacks above the content on small screens.
+### Backend tests
 
-Styling uses Tailwind CSS v4 via `@tailwindcss/vite` and the official `tailwindcss-primeui` integration. Add utility classes directly to Vue templates; semantic utilities such as `bg-primary`, `border-surface`, and `text-muted-color` follow the Aura theme. PrimeVue controls retain their Aura styling, with the `primevue` CSS layer before Tailwind utilities so utilities can override controls. See the [official PrimeVue Tailwind guide](https://primevue.org/tailwind/).
+Run `cargo test` with the local PostgreSQL service available and `DATABASE_URL`
+configured (SQLx also reads the root `.env`). The database used for compile-time
+query checks must already have the migrations applied. The database role must
+have permission to create databases: each `#[sqlx::test]` creates its own isolated
+database, applies migrations, and removes the database after a successful test.
+Failed test databases are retained by SQLx for debugging. Use a local development
+PostgreSQL instance for this suite.
 
-`frontend/src/style.css` contains the Tailwind imports and shared base styles. The `.app-dark` class is applied to the document root, keeping Tailwind, PrimeVue, and teleported dialogs in sync. No separate Tailwind config file is needed for v4.
+The backend suite covers registration/login, token validation and account
+revocation, current admin permissions, item ownership and CRUD, quantity
+validation, profile isolation, HTTP rejection statuses, CORS, safe error
+responses, password hashing, and migration backfills and constraints. The existing
+Swagger/OpenAPI test also runs as part of this command.
 
-Items include a non-negative integer `quantity` (defaults to 1 for existing items and requests that omit it) and a server-generated `created_at` timestamp. The admin table can sort both columns and formats creation dates in the browser's local time. Apply migrations before compiling changed SQLx queries: `cargo sqlx migrate run` with `DATABASE_URL` configured. Startup also runs pending migrations.
+```bash
+set -a
+source .env
+set +a
+cargo sqlx migrate run
+cargo check
+cargo test
+```
 
-## Page URLs and production hosting
+### Frontend build and browser tests
+
+From the repository root:
+
+```bash
+cd frontend
+npm ci
+npm run build
+npx playwright install chromium
+npm run test:e2e
+```
+
+Playwright starts Vite on `127.0.0.1:5173`, or reuses an existing server there. Most tests mock API responses. The `dashboard.spec.ts` smoke test uses the real API and prefilled administrator credentials, so the API must be running with that development account for the full suite.
+
+To run only the mocked browser tests without an API server:
+
+```bash
+npm run test:e2e -- --grep-invert "login dashboard is usable"
+```
+
+The smoke test writes `artifacts/dashboard.png` at the repository root; failures can also produce screenshots under `frontend/test-results/`. On Linux systems missing browser libraries, use `npx playwright install --with-deps chromium` with the appropriate system permissions.
+
+## Production hosting
 
 Workspace pages use Vue Router history URLs: `/overview`, `/items`, and `/users`.
 Navigation supports browser Back/Forward, bookmarks, and refreshes. Opening a page
@@ -248,6 +408,18 @@ location /api/ {
     proxy_pass http://127.0.0.1:8000;
 }
 
+location = /docs {
+    proxy_pass http://127.0.0.1:8000;
+}
+
+location /docs/ {
+    proxy_pass http://127.0.0.1:8000;
+}
+
+location /api-docs/ {
+    proxy_pass http://127.0.0.1:8000;
+}
+
 location /assets/ {
     try_files $uri =404;
 }
@@ -260,6 +432,31 @@ location / {
 The fallback serves the app without redirecting the browser away from the requested
 page. API errors and missing built assets are not rewritten to HTML. If using a
 static hosting provider, configure its equivalent SPA fallback and API proxy.
+
+Build the backend with `cargo build --release` against a migrated database, or prepare offline query metadata first. Run `target/release/axum-vue-template` with the required environment variables and database access. Axum serves the API and documentation; the frontend assets are served separately by your web host.
+
+Use deployment-specific database credentials, a strong `JWT_SECRET`, and a changed bootstrap password. Terminate HTTPS at your proxy and configure `FRONTEND_ORIGIN` for the deployed frontend. The supplied Compose file is for development; plan persistent database storage and backups separately.
+
+## Troubleshooting
+
+| Symptom                                                   | What to check                                                                                          |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| SQLx compilation fails with missing tables or columns     | Export `DATABASE_URL` and apply migrations before building.                                            |
+| Database connection refused                               | Check `docker compose ps` and use host port `55432` for the supplied database.                         |
+| API reports a missing environment variable                | Source `.env` with `set -a` in the same terminal before `cargo run`.                                   |
+| Frontend requests fail after changing API ports           | Update the Vite proxy target and restart Vite.                                                         |
+| Login fails after editing bootstrap credentials           | Existing accounts retain their original credentials; the environment variables only seed new accounts. |
+| Refreshing `/items` or `/users` returns 404 in production | Configure the SPA fallback described above.                                                            |
+| Swagger UI returns the frontend HTML                      | Forward `/docs`, `/docs/`, and `/api-docs/` to Axum.                                                   |
+| Backend tests cannot create a database                    | Use a development PostgreSQL role with database-creation permission.                                   |
+| Browser tests cannot launch Chromium                      | Install Playwright’s browser and required system libraries.                                            |
+
+## References
+
+- [Upstream FastAPI template](https://github.com/fastapi/full-stack-fastapi-template)
+- [Axum documentation](https://docs.rs/axum/latest/axum/)
+- [SQLx checked macros and migrations](https://docs.rs/sqlx/latest/sqlx/)
+- [PrimeVue documentation](https://primevue.org/)
 
 ## License
 

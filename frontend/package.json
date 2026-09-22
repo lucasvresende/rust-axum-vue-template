@@ -7,7 +7,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@primeuix/themes": "^1.2.3",
@@ -22,6 +24,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.10.0",
     "@vitejs/plugin-vue": "^6.0.1",
+    "prettier": "3.6.2",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vite": "^7.1.12",

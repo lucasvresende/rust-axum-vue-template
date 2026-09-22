@@ -22,6 +22,7 @@ struct Claims {
     superuser: bool,
 }
 
+/// Hash a password with Argon2id and a fresh random salt.
 pub(crate) fn hash(password: &str) -> Result<String> {
     Argon2::default()
         .hash_password(password.as_bytes(), &SaltString::generate(&mut OsRng))
@@ -29,6 +30,7 @@ pub(crate) fn hash(password: &str) -> Result<String> {
         .map_err(|_| ApiError::Bad("password hashing failed"))
 }
 
+/// Verify a stored password hash; malformed hashes are treated as mismatches.
 fn password_matches(password: &str, saved: &str) -> bool {
     PasswordHash::new(saved).ok().is_some_and(|p| {
         Argon2::default()
@@ -37,6 +39,7 @@ fn password_matches(password: &str, saved: &str) -> bool {
     })
 }
 
+/// Issue an HS256 bearer token that expires in 24 hours.
 fn jwt(user: &User, secret: &str) -> String {
     encode(
         &Header::default(),
@@ -50,6 +53,9 @@ fn jwt(user: &User, secret: &str) -> String {
     .expect("JWT encoding")
 }
 
+/// Validate a bearer token and reload the active user from the database.
+///
+/// Authorization uses current database permissions, not the token’s superuser claim.
 pub(crate) async fn auth(headers: &axum::http::HeaderMap, state: &AppState) -> Result<User> {
     let token = headers
         .get(header::AUTHORIZATION)
@@ -81,6 +87,7 @@ pub(crate) async fn auth(headers: &axum::http::HeaderMap, state: &AppState) -> R
     .ok_or(ApiError::Unauthorized)
 }
 
+/// Authenticate an active account and return its bearer token.
 #[utoipa::path(
     post,
     path = "/api/v1/login",

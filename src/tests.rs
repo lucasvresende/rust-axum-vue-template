@@ -22,6 +22,7 @@ fn app(db: &PgPool) -> Router {
     )
 }
 
+/// Send an in-process request and decode JSON responses, preserving plain-text rejections.
 async fn request(
     app: &Router,
     method: &str,
@@ -82,6 +83,7 @@ async fn login(app: &Router, email: &str) -> String {
     body["access_token"].as_str().unwrap().into()
 }
 
+/// Create a test token with explicit claims for expiry and signature validation scenarios.
 fn token(subject: &str, expiry: i64, secret: &str) -> String {
     jsonwebtoken::encode(
         &jsonwebtoken::Header::default(),

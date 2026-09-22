@@ -57,7 +57,9 @@ for (const mobile of [false, true]) {
       page.getByRole("heading", { name: "Users", exact: true }),
     ).toBeVisible();
 
-    await expect(page.getByRole("columnheader", { name: "Email" })).toBeVisible();
+    await expect(
+      page.getByRole("columnheader", { name: "Email" }),
+    ).toBeVisible();
 
     await expect(page.getByRole("button", { name: "New item" })).toHaveCount(0);
 
