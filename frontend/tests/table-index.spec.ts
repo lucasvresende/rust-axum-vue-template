@@ -1,3 +1,4 @@
+import { signIn } from "./helpers";
 import { test, expect } from "@playwright/test";
 
 for (const view of ["My items", "Users"]) {
@@ -27,7 +28,7 @@ for (const view of ["My items", "Users"]) {
       });
     });
     await page.goto("/");
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await signIn(page);
     await page
       .getByRole("navigation", { name: "Workspace" })
       .getByRole("link", { name: view, exact: true })

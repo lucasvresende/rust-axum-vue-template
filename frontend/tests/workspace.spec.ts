@@ -1,3 +1,4 @@
+import { signIn } from "./helpers";
 import { test, expect } from "@playwright/test";
 
 for (const mobile of [false, true]) {
@@ -28,7 +29,7 @@ for (const mobile of [false, true]) {
 
     await page.goto("/");
 
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await signIn(page);
 
     const nav = page.getByRole("navigation", { name: "Workspace" });
 

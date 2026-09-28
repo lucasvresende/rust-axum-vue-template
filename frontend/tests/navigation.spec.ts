@@ -1,3 +1,4 @@
+import { signIn } from "./helpers";
 import { test, expect } from "@playwright/test";
 
 test("theme covers dialogs and navigation can collapse", async ({ page }) => {
@@ -17,7 +18,7 @@ test("theme covers dialogs and navigation can collapse", async ({ page }) => {
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await signIn(page);
   await expect(
     page.getByRole("link", { name: "Users", exact: true }),
   ).toHaveCount(0);

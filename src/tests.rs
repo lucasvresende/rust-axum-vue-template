@@ -17,6 +17,8 @@ fn app(db: &PgPool) -> Router {
         crate::state::AppState {
             db: db.clone(),
             secret: Arc::new(SECRET.into()),
+            mail_key: Arc::new([7_u8; 32]),
+            public_url: Arc::new("http://localhost:5173".into()),
         },
         "http://localhost:5173".parse().unwrap(),
     )
@@ -53,20 +55,18 @@ async fn request(
     (status, body)
 }
 
-async fn register(app: &Router, email: &str) -> Value {
-    let (status, user) = request(
-        app,
-        "POST",
-        "/api/v1/users",
-        None,
-        Some(json!({"email":email,"password":PASSWORD})),
-    )
-    .await;
-    assert_eq!(status, StatusCode::CREATED, "{user}");
-    assert!(user.get("hashed_password").is_none());
-    assert!(user.get("password").is_none());
-    assert_eq!(user["is_superuser"], false);
-    user
+async fn register(pool: &PgPool, app: &Router, email: &str) -> Value {
+    // Test fixture for existing item/authorization cases. The public registration route is gone.
+    let _ = app;
+    let id = Uuid::new_v4();
+    sqlx::query("INSERT INTO users(id,email,hashed_password,full_name) VALUES($1,$2,$3,'')")
+        .bind(id)
+        .bind(email.to_lowercase())
+        .bind(crate::auth::hash(PASSWORD).unwrap())
+        .execute(pool)
+        .await
+        .unwrap();
+    json!({"id":id,"email":email.to_lowercase(),"full_name":"","is_active":true,"is_superuser":false,"needs_setup":false})
 }
 
 async fn login(app: &Router, email: &str) -> String {
@@ -87,48 +87,31 @@ async fn login(app: &Router, email: &str) -> String {
 fn token(subject: &str, expiry: i64, secret: &str) -> String {
     jsonwebtoken::encode(
         &jsonwebtoken::Header::default(),
-        &json!({"sub":subject,"exp":expiry,"superuser":true}),
+        &json!({"sub":subject,"exp":expiry,"superuser":true,"ver":0}),
         &jsonwebtoken::EncodingKey::from_secret(secret.as_bytes()),
     )
     .unwrap()
 }
 
 #[sqlx::test]
-async fn registration_login_and_profile(pool: PgPool) {
+async fn login_and_profile(pool: PgPool) {
     let app = app(&pool);
-    for (password, expected) in [
-        ("12345678901", StatusCode::BAD_REQUEST),
-        ("123456789012", StatusCode::CREATED),
-    ] {
-        assert_eq!(
-            request(
-                &app,
-                "POST",
-                "/api/v1/users",
-                None,
-                Some(json!({"email":"boundary@example.com","password":password}))
-            )
-            .await
-            .0,
-            expected
-        );
-    }
-    let user = register(&app, "Alice@Example.com").await;
-    assert_eq!(user["email"], "alice@example.com");
-    assert_eq!(user["full_name"], "");
     assert_eq!(
         request(
             &app,
             "POST",
             "/api/v1/users",
             None,
-            Some(json!({"email":"ALICE@example.com","password":PASSWORD}))
+            Some(json!({"email":"public@example.com","full_name":"Public"}))
         )
         .await
         .0,
-        StatusCode::CONFLICT
+        StatusCode::UNAUTHORIZED
     );
-    let other = register(&app, "other@example.com").await;
+    let user = register(&pool, &app, "Alice@Example.com").await;
+    assert_eq!(user["email"], "alice@example.com");
+    assert_eq!(user["full_name"], "");
+    let other = register(&pool, &app, "other@example.com").await;
     let token = login(&app, "ALICE@example.com").await;
     let (status, me) = request(&app, "GET", "/api/v1/users/me", Some(&token), None).await;
     assert_eq!(status, StatusCode::OK);
@@ -180,7 +163,7 @@ async fn registration_login_and_profile(pool: PgPool) {
 #[sqlx::test]
 async fn authentication_and_revocation(pool: PgPool) {
     let app = app(&pool);
-    let user = register(&app, "alice@example.com").await;
+    let user = register(&pool, &app, "alice@example.com").await;
     let valid = login(&app, "alice@example.com").await;
     let now = chrono::Utc::now().timestamp();
     let id = user["id"].as_str().unwrap();
@@ -258,7 +241,7 @@ async fn authentication_and_revocation(pool: PgPool) {
 #[sqlx::test]
 async fn admin_permissions_use_current_database_state(pool: PgPool) {
     let app = app(&pool);
-    register(&app, "admin@example.com").await;
+    register(&pool, &app, "admin@example.com").await;
     let regular = login(&app, "admin@example.com").await;
     assert_eq!(
         request(&app, "GET", "/api/v1/users", Some(&regular), None)
@@ -290,8 +273,8 @@ async fn admin_permissions_use_current_database_state(pool: PgPool) {
 #[sqlx::test]
 async fn item_lifecycle_and_ownership(pool: PgPool) {
     let app = app(&pool);
-    let owner = register(&app, "owner@example.com").await;
-    register(&app, "other@example.com").await;
+    let owner = register(&pool, &app, "owner@example.com").await;
+    register(&pool, &app, "other@example.com").await;
     let a = login(&app, "owner@example.com").await;
     let b = login(&app, "other@example.com").await;
     let (status, item) = request(
@@ -370,7 +353,7 @@ async fn item_lifecycle_and_ownership(pool: PgPool) {
 #[sqlx::test]
 async fn quantity_validation_is_atomic(pool: PgPool) {
     let app = app(&pool);
-    register(&app, "owner@example.com").await;
+    register(&pool, &app, "owner@example.com").await;
     let token = login(&app, "owner@example.com").await;
     let (status, item) = request(
         &app,
@@ -604,5 +587,603 @@ async fn migrations_backfill_and_enforce_integrity(pool: PgPool) {
             .await
             .unwrap(),
         0
+    );
+}
+
+async fn queued_token(pool: &PgPool, recipient: &str, subject: &str) -> String {
+    use aes_gcm::{Aes256Gcm, KeyInit, Nonce, aead::Aead};
+    use sqlx::Row;
+    let row=sqlx::query("SELECT ciphertext,nonce FROM mail_outbox WHERE recipient=$1 AND subject=$2 ORDER BY created_at DESC,id DESC LIMIT 1")
+        .bind(recipient).bind(subject).fetch_one(pool).await.unwrap();
+    let ciphertext: Vec<u8> = row.get("ciphertext");
+    let nonce: Vec<u8> = row.get("nonce");
+    let cipher = Aes256Gcm::new_from_slice(&[7_u8; 32]).unwrap();
+    let text = String::from_utf8(
+        cipher
+            .decrypt(Nonce::from_slice(&nonce), ciphertext.as_ref())
+            .unwrap(),
+    )
+    .unwrap();
+    let token = text
+        .split("token=")
+        .nth(1)
+        .unwrap()
+        .split_whitespace()
+        .next()
+        .unwrap();
+    assert!(!String::from_utf8_lossy(&ciphertext).contains(token));
+    token.into()
+}
+
+async fn admin_account(pool: &PgPool, app: &Router) -> (Value, String) {
+    let u = register(pool, app, "admin@example.com").await;
+    sqlx::query("UPDATE users SET is_superuser=TRUE WHERE id=$1")
+        .bind(Uuid::parse_str(u["id"].as_str().unwrap()).unwrap())
+        .execute(pool)
+        .await
+        .unwrap();
+    let token = login(app, "admin@example.com").await;
+    (u, token)
+}
+
+#[sqlx::test]
+async fn invitations_and_admin_status_are_enforced(pool: PgPool) {
+    let app = app(&pool);
+    let (admin, admin_token) = admin_account(&pool, &app).await;
+    let member = register(&pool, &app, "member@example.com").await;
+    let member_token = login(&app, "member@example.com").await;
+    let payload = json!({"email":"INVITED@example.com","full_name":"Invited Person"});
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/users",
+            Some(&admin_token),
+            Some(json!({"email":"bad@example.com","full_name":"Bad","password":"visible"}))
+        )
+        .await
+        .0,
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
+    assert_eq!(
+        request(&app, "POST", "/api/v1/users", None, Some(payload.clone()))
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/users",
+            Some(&member_token),
+            Some(payload.clone())
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    let (status, invited) = request(
+        &app,
+        "POST",
+        "/api/v1/users",
+        Some(&admin_token),
+        Some(payload),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{invited}");
+    assert_eq!(invited["email"], "invited@example.com");
+    assert_eq!(invited["needs_setup"], true);
+    assert_eq!(invited["is_superuser"], false);
+    assert!(invited.get("password").is_none());
+    assert!(invited.get("hashed_password").is_none());
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/login",
+            None,
+            Some(json!({"email":"invited@example.com","password":"should be ignored"}))
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
+    let initial = queued_token(&pool, "invited@example.com", "Set up your account").await;
+    let resend_path = format!(
+        "/api/v1/users/{}/resend-invitation",
+        invited["id"].as_str().unwrap()
+    );
+    assert_eq!(
+        request(&app, "POST", &resend_path, Some(&admin_token), None)
+            .await
+            .0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/password/setup",
+            None,
+            Some(json!({"token":initial,"password":PASSWORD}))
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    let setup = queued_token(&pool, "invited@example.com", "Set up your account").await;
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/password/recover",
+            None,
+            Some(json!({"token":setup,"password":PASSWORD}))
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/password/setup",
+            None,
+            Some(json!({"token":setup,"password":"too-short"}))
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/password/setup",
+            None,
+            Some(json!({"token":setup,"password":PASSWORD}))
+        )
+        .await
+        .0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/password/setup",
+            None,
+            Some(json!({"token":setup,"password":PASSWORD}))
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    let invited_token = login(&app, "invited@example.com").await;
+    let status_path = format!("/api/v1/users/{}/status", invited["id"].as_str().unwrap());
+    assert_eq!(
+        request(
+            &app,
+            "PUT",
+            &status_path,
+            Some(&member_token),
+            Some(json!({"is_active":false}))
+        )
+        .await
+        .0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        request(
+            &app,
+            "PUT",
+            &status_path,
+            Some(&admin_token),
+            Some(json!({"is_active":false}))
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        request(&app, "GET", "/api/v1/users/me", Some(&invited_token), None)
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        request(
+            &app,
+            "PUT",
+            &status_path,
+            Some(&admin_token),
+            Some(json!({"is_active":true}))
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    assert_eq!(
+        request(&app, "GET", "/api/v1/users/me", Some(&invited_token), None)
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    let _ = login(&app, "invited@example.com").await;
+    let self_path = format!("/api/v1/users/{}/status", admin["id"].as_str().unwrap());
+    assert_eq!(
+        request(
+            &app,
+            "PUT",
+            &self_path,
+            Some(&admin_token),
+            Some(json!({"is_active":false}))
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(member["is_superuser"], false);
+}
+
+#[sqlx::test]
+async fn recovery_is_generic_single_use_and_revokes_sessions(pool: PgPool) {
+    let app = app(&pool);
+    let user = register(&pool, &app, "recover@example.com").await;
+    let old = login(&app, "recover@example.com").await;
+    let (_, unknown) = request(
+        &app,
+        "POST",
+        "/api/v1/password/recovery-requests",
+        None,
+        Some(json!({"email":"missing@example.com"})),
+    )
+    .await;
+    let (status, known) = request(
+        &app,
+        "POST",
+        "/api/v1/password/recovery-requests",
+        None,
+        Some(json!({"email":"recover@example.com"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(known, unknown);
+    let first = queued_token(&pool, "recover@example.com", "Reset your password").await;
+    let user_id = Uuid::parse_str(user["id"].as_str().unwrap()).unwrap();
+    sqlx::query("UPDATE action_tokens SET expires_at=NOW()-INTERVAL '1 second' WHERE user_id=$1 AND purpose='recovery'")
+        .bind(user_id).execute(&pool).await.unwrap();
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/password/recover",
+            None,
+            Some(json!({"token":first,"password":"a-very-long-new-password"}))
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    request(
+        &app,
+        "POST",
+        "/api/v1/password/recovery-requests",
+        None,
+        Some(json!({"email":"recover@example.com"})),
+    )
+    .await;
+    let second = queued_token(&pool, "recover@example.com", "Reset your password").await;
+    assert_ne!(first, second);
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/password/recover",
+            None,
+            Some(json!({"token":second,"password":"a-very-long-new-password"}))
+        )
+        .await
+        .0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/password/recover",
+            None,
+            Some(json!({"token":second,"password":"a-very-long-new-password"}))
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        request(&app, "GET", "/api/v1/users/me", Some(&old), None)
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/login",
+            None,
+            Some(json!({"email":"recover@example.com","password":PASSWORD}))
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/login",
+            None,
+            Some(json!({"email":"recover@example.com","password":"a-very-long-new-password"}))
+        )
+        .await
+        .0,
+        StatusCode::OK
+    );
+    for _ in 0..3 {
+        assert_eq!(
+            request(
+                &app,
+                "POST",
+                "/api/v1/password/recovery-requests",
+                None,
+                Some(json!({"email":"recover@example.com"}))
+            )
+            .await
+            .0,
+            StatusCode::OK
+        );
+    }
+    let count:i64=sqlx::query_scalar("SELECT count(*) FROM mail_outbox WHERE recipient='recover@example.com' AND subject='Reset your password'").fetch_one(&pool).await.unwrap();
+    assert_eq!(count, 3);
+}
+
+#[sqlx::test]
+async fn profile_email_change_requires_password_and_confirmation(pool: PgPool) {
+    let app = app(&pool);
+    let user = register(&pool, &app, "old@example.com").await;
+    register(&pool, &app, "taken@example.com").await;
+    let token = login(&app, "old@example.com").await;
+    let (status, updated) = request(
+        &app,
+        "PUT",
+        "/api/v1/users/me",
+        Some(&token),
+        Some(json!({"full_name":"New Name","is_superuser":true})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(updated["full_name"], "New Name");
+    assert_eq!(updated["is_superuser"], false);
+    assert_eq!(updated["email"], user["email"]);
+    let notices:i64=sqlx::query_scalar("SELECT count(*) FROM mail_outbox WHERE recipient='old@example.com' AND subject='Your profile was updated'").fetch_one(&pool).await.unwrap();
+    assert_eq!(notices, 1);
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/users/me/email-change",
+            Some(&token),
+            Some(json!({"email":"new@example.com","current_password":"wrong"}))
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/users/me/email-change",
+            Some(&token),
+            Some(json!({"email":"taken@example.com","current_password":PASSWORD}))
+        )
+        .await
+        .0,
+        StatusCode::CONFLICT
+    );
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/users/me/email-change",
+            Some(&token),
+            Some(json!({"email":"new@example.com","current_password":PASSWORD}))
+        )
+        .await
+        .0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        request(&app, "GET", "/api/v1/users/me", Some(&token), None)
+            .await
+            .1["email"],
+        "old@example.com"
+    );
+    let confirmation = queued_token(&pool, "new@example.com", "Confirm your email address").await;
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/password/setup",
+            None,
+            Some(json!({"token":confirmation,"password":PASSWORD}))
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/users/confirm-email",
+            None,
+            Some(json!({"token":confirmation}))
+        )
+        .await
+        .0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/users/confirm-email",
+            None,
+            Some(json!({"token":confirmation}))
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+        request(&app, "GET", "/api/v1/users/me", Some(&token), None)
+            .await
+            .0,
+        StatusCode::UNAUTHORIZED
+    );
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/login",
+            None,
+            Some(json!({"email":"old@example.com","password":PASSWORD}))
+        )
+        .await
+        .0,
+        StatusCode::UNAUTHORIZED
+    );
+    let _ = login(&app, "new@example.com").await;
+}
+
+#[sqlx::test]
+async fn concurrent_redemption_accepts_only_one_request(pool: PgPool) {
+    let app = app(&pool);
+    register(&pool, &app, "race@example.com").await;
+    request(
+        &app,
+        "POST",
+        "/api/v1/password/recovery-requests",
+        None,
+        Some(json!({"email":"race@example.com"})),
+    )
+    .await;
+    let token = queued_token(&pool, "race@example.com", "Reset your password").await;
+    let body = json!({"token":token,"password":"a-very-long-new-password"});
+    let (first, second) = tokio::join!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/password/recover",
+            None,
+            Some(body.clone())
+        ),
+        request(&app, "POST", "/api/v1/password/recover", None, Some(body))
+    );
+    let statuses = [first.0, second.0];
+    assert!(statuses.contains(&StatusCode::NO_CONTENT));
+    assert!(statuses.contains(&StatusCode::BAD_REQUEST));
+}
+
+#[sqlx::test]
+async fn email_confirmation_expires_and_checks_uniqueness_again(pool: PgPool) {
+    let app = app(&pool);
+    let original = register(&pool, &app, "original@example.com").await;
+    let other = register(&pool, &app, "other@example.com").await;
+    let token = login(&app, "original@example.com").await;
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/users/me/email-change",
+            Some(&token),
+            Some(json!({"email":"future@example.com","current_password":PASSWORD}))
+        )
+        .await
+        .0,
+        StatusCode::NO_CONTENT
+    );
+    let link = queued_token(&pool, "future@example.com", "Confirm your email address").await;
+    let original_id = Uuid::parse_str(original["id"].as_str().unwrap()).unwrap();
+    sqlx::query("UPDATE action_tokens SET expires_at=NOW()-INTERVAL '1 second' WHERE user_id=$1 AND purpose='email_change'").bind(original_id).execute(&pool).await.unwrap();
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/users/confirm-email",
+            None,
+            Some(json!({"token":link}))
+        )
+        .await
+        .0,
+        StatusCode::BAD_REQUEST
+    );
+    sqlx::query("UPDATE action_tokens SET expires_at=NOW()+INTERVAL '1 minute' WHERE user_id=$1 AND purpose='email_change'").bind(original_id).execute(&pool).await.unwrap();
+    sqlx::query("UPDATE users SET email='future@example.com' WHERE id=$1")
+        .bind(Uuid::parse_str(other["id"].as_str().unwrap()).unwrap())
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/users/confirm-email",
+            None,
+            Some(json!({"token":link}))
+        )
+        .await
+        .0,
+        StatusCode::CONFLICT
+    );
+    assert_eq!(
+        request(&app, "GET", "/api/v1/users/me", Some(&token), None)
+            .await
+            .1["email"],
+        "original@example.com"
+    );
+}
+
+#[sqlx::test]
+async fn token_attempts_are_limited(pool: PgPool) {
+    let app = app(&pool);
+    for _ in 0..10 {
+        assert_eq!(
+            request(
+                &app,
+                "POST",
+                "/api/v1/password/setup",
+                None,
+                Some(json!({"token":"invalid","password":PASSWORD}))
+            )
+            .await
+            .0,
+            StatusCode::BAD_REQUEST
+        );
+    }
+    assert_eq!(
+        request(
+            &app,
+            "POST",
+            "/api/v1/password/setup",
+            None,
+            Some(json!({"token":"invalid","password":PASSWORD}))
+        )
+        .await
+        .0,
+        StatusCode::TOO_MANY_REQUESTS
     );
 }

@@ -18,13 +18,19 @@ pub(crate) async fn initialize() -> Result<PgPool, Box<dyn std::error::Error>> {
 
     MIGRATOR.run(&db).await?;
 
-    let email = env::var("FIRST_SUPERUSER_EMAIL").unwrap_or_else(|_| "admin@example.com".into());
-
+    let email = env::var("FIRST_SUPERUSER_EMAIL")
+        .unwrap_or_else(|_| "admin@example.com".into())
+        .trim()
+        .to_lowercase();
     if sqlx::query!("SELECT id FROM users WHERE email = $1", email)
         .fetch_optional(&db)
         .await?
         .is_none()
     {
+        let password = env::var("FIRST_SUPERUSER_PASSWORD")?;
+        if password.chars().count() < 15 || password.len() > 1024 {
+            return Err("FIRST_SUPERUSER_PASSWORD must be 15 to 1024 characters".into());
+        }
         sqlx::query!(
             r#"
             INSERT
@@ -32,8 +38,8 @@ pub(crate) async fn initialize() -> Result<PgPool, Box<dyn std::error::Error>> {
             VALUES ($1, $2, $3, $4, TRUE)
             "#,
             Uuid::new_v4(),
-            env::var("FIRST_SUPERUSER_EMAIL").unwrap_or_else(|_| "admin@example.com".into()),
-            hash(&env::var("FIRST_SUPERUSER_PASSWORD").unwrap_or_else(|_| "changethis".into()),)?,
+            email,
+            hash(&password)?,
             "Administrator",
         )
         .execute(&db)

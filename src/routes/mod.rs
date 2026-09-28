@@ -13,7 +13,10 @@ use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use self::{
     health::health,
     items::{create_item, items, remove_item, update_item},
-    users::{me, register, update_me, users},
+    users::{
+        confirm_email, create_user, me, recover_password, request_email_change, request_recovery,
+        resend_invitation, set_active, setup_password, update_me, users,
+    },
 };
 use crate::{auth::login, state::AppState};
 
@@ -22,8 +25,18 @@ pub(crate) fn router(state: AppState, origin: HeaderValue) -> Router {
     Router::new()
         .route("/api/v1/health", get(health))
         .route("/api/v1/login", post(login))
-        .route("/api/v1/users", post(register).get(users))
+        .route("/api/v1/users", post(create_user).get(users))
         .route("/api/v1/users/me", get(me).put(update_me))
+        .route("/api/v1/users/me/email-change", post(request_email_change))
+        .route("/api/v1/users/confirm-email", post(confirm_email))
+        .route("/api/v1/users/{id}/status", axum::routing::put(set_active))
+        .route(
+            "/api/v1/users/{id}/resend-invitation",
+            post(resend_invitation),
+        )
+        .route("/api/v1/password/setup", post(setup_password))
+        .route("/api/v1/password/recovery-requests", post(request_recovery))
+        .route("/api/v1/password/recover", post(recover_password))
         .route("/api/v1/items", get(items).post(create_item))
         .route("/api/v1/items/{id}", delete(remove_item).put(update_item))
         .merge(docs::router())

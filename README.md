@@ -7,6 +7,7 @@ A Rust and Vue starting point inspired by [FastAPI’s full-stack template](http
 - [What is included](#what-is-included)
 - [Prerequisites](#prerequisites)
 - [Local development](#local-development)
+- [Feature guide](#feature-guide)
 - [Configuration](#configuration)
 - [API and authentication](#api-and-authentication)
 - [Project structure](#project-structure)
@@ -22,12 +23,12 @@ A Rust and Vue starting point inspired by [FastAPI’s full-stack template](http
 
 - **Axum 0.8** API with typed JSON, JWT authentication, CORS, request tracing, and Swagger UI.
 - **SQLx 0.9 and PostgreSQL 18**, compile-time checked queries, and embedded migrations.
-- **Argon2id** password hashing, bootstrap administrator, registration, profile updates, and an admin-only user directory.
+- **Argon2id** password hashing, bootstrap administrator, admin invitations, profile and email changes, password recovery, and an admin-only user directory.
 - Items with owner-scoped create, read, update, and delete operations, quantities, and creation timestamps.
 - **Vue 3.5, Vite, PrimeVue 4.5 (Aura), and Tailwind CSS 4**, with a Sakai-inspired responsive workspace, dark mode, and toast feedback.
 - Rust API tests and Playwright browser tests; Docker Compose services for PostgreSQL and Mailpit.
 
-Mailpit is supplied for future email development. The API does not currently send mail or implement password-reset endpoints.
+Mailpit receives development email. The API queues encrypted invitation, recovery, and account-change mail and retries SMTP delivery.
 
 ## Prerequisites
 
@@ -82,7 +83,7 @@ npm ci
 npm run dev
 ```
 
-Open [the workspace](http://localhost:5173). Development credentials are `admin@example.com` / `changethis`, unless changed in `.env`. The login form is prefilled with those defaults; enter your configured credentials if they differ.
+Open [the workspace](http://localhost:5173). On a new database, the example bootstrap credentials are `admin@example.com` / `development-admin-password`. Enter them in the empty login form. Existing administrators keep their previously configured passwords.
 
 | Service    | Local address                       | Purpose                           |
 | ---------- | ----------------------------------- | --------------------------------- |
@@ -95,6 +96,53 @@ Open [the workspace](http://localhost:5173). Development credentials are `admin@
 
 Stop the API and Vite with Ctrl+C. Use `docker compose stop` to stop the development services while keeping their containers.
 
+## Feature guide
+
+The initial administrator is created at API startup from `FIRST_SUPERUSER_EMAIL` and
+`FIRST_SUPERUSER_PASSWORD`. That account is the only way to administer users; there
+is no public sign-up or role-promotion screen or endpoint. An administrator creates
+regular users, and each new user chooses their own password through an emailed link.
+An inactive account cannot sign in or use an existing bearer token.
+
+| Feature | How to use it | Where it is implemented |
+| ------- | ------------- | ----------------------- |
+| Sign in and sign out | Enter your email and password at `/login`; use **Sign out** in the header. Bookmarked workspace pages resume after sign-in. | [`src/auth.rs`](src/auth.rs), [`frontend/src/components/LoginForm.vue`](frontend/src/components/LoginForm.vue), [`frontend/src/App.vue`](frontend/src/App.vue), [`frontend/src/router.ts`](frontend/src/router.ts) |
+| Overview | Open **Overview** for your item count, role, session status, and a preview of your items. Admins also see the user directory. | [`frontend/src/components/DashboardHero.vue`](frontend/src/components/DashboardHero.vue), [`frontend/src/components/DashboardStats.vue`](frontend/src/components/DashboardStats.vue), [`frontend/src/App.vue`](frontend/src/App.vue) |
+| Personal inventory | Open **My items** to create, edit, or delete an item. Each item has a title, description, non-negative quantity, and creation time; only its owner can view or change it. | [`src/routes/items.rs`](src/routes/items.rs), [`frontend/src/components/ItemsTable.vue`](frontend/src/components/ItemsTable.vue), [`frontend/src/components/CreateItemDialog.vue`](frontend/src/components/CreateItemDialog.vue) |
+| Table controls | Search, sort, filter, select visible columns, and paginate the items and users tables. | [`frontend/src/components/WorkspaceTable.vue`](frontend/src/components/WorkspaceTable.vue), [`frontend/src/components/ColumnFilter.vue`](frontend/src/components/ColumnFilter.vue) |
+| User directory | As an admin, open **Users** to inspect names, emails, roles, invitation state, and active status. Members cannot open this page or call the directory endpoint. | [`src/routes/users.rs`](src/routes/users.rs), [`frontend/src/components/UsersTable.vue`](frontend/src/components/UsersTable.vue) |
+| Invite a user | On **Users**, choose **New user**, enter a name and email, then **Send invitation**. The form has no password field; the account is a regular user awaiting setup. | [`src/routes/users.rs`](src/routes/users.rs), [`frontend/src/components/UsersTable.vue`](frontend/src/components/UsersTable.vue), [`migrations/20260928120000_user_management.sql`](migrations/20260928120000_user_management.sql) |
+| Resend an invitation | Use **Resend invite** for an active user still awaiting password setup. The previous link stops working. | [`src/routes/users.rs`](src/routes/users.rs), [`frontend/src/components/UsersTable.vue`](frontend/src/components/UsersTable.vue) |
+| Activate or deactivate | Use the row action on **Users**. Deactivation immediately blocks login and existing tokens. Reactivation permits a fresh login; it does not revive an old token. Admins cannot deactivate themselves or the last active admin. | [`src/routes/users.rs`](src/routes/users.rs), [`src/auth.rs`](src/auth.rs), [`frontend/src/components/UsersTable.vue`](frontend/src/components/UsersTable.vue) |
+| First password setup | Open the link in the invitation email, enter and confirm a password at `/set-password`, then sign in normally. | [`src/routes/users.rs`](src/routes/users.rs), [`frontend/src/components/AccountFlows.vue`](frontend/src/components/AccountFlows.vue) |
+| Password recovery | Choose **Forgot password?** at `/login`, enter your email, open the recovery link, and set a new password at `/reset-password`. The request page always gives a generic response. | [`src/routes/users.rs`](src/routes/users.rs), [`frontend/src/components/AccountFlows.vue`](frontend/src/components/AccountFlows.vue) |
+| Edit your profile | Open **Profile** to edit your display name. It saves immediately and queues a confirmation notice to your current email. | [`src/routes/users.rs`](src/routes/users.rs), [`frontend/src/components/ProfilePage.vue`](frontend/src/components/ProfilePage.vue) |
+| Change your login email | In **Profile**, enter the new email and your current password. Confirm the link sent to the new address; until then, the old address remains your login. The old address receives a change notice. | [`src/routes/users.rs`](src/routes/users.rs), [`frontend/src/components/ProfilePage.vue`](frontend/src/components/ProfilePage.vue), [`frontend/src/components/AccountFlows.vue`](frontend/src/components/AccountFlows.vue) |
+| Appearance and navigation | Toggle dark mode or collapse the workspace navigation from the header. Workspace URLs support bookmarks, refresh, and browser history. | [`frontend/src/components/AppHeader.vue`](frontend/src/components/AppHeader.vue), [`frontend/src/components/WorkspaceNav.vue`](frontend/src/components/WorkspaceNav.vue), [`frontend/src/router.ts`](frontend/src/router.ts) |
+| API documentation and health | Use `/docs/` for Swagger UI, `/api-docs/openapi.json` for the schema, and `/api/v1/health` for liveness. | [`src/routes/docs.rs`](src/routes/docs.rs), [`src/routes/health.rs`](src/routes/health.rs) |
+| Outbound email | Locally, inspect invitation, recovery, and change notices at [Mailpit](http://localhost:8025). The API encrypts queued bodies and retries SMTP failures. | [`src/mail.rs`](src/mail.rs), [`docker-compose.yml`](docker-compose.yml), [`src/state.rs`](src/state.rs) |
+
+### Account and email behavior
+
+- A new user has no usable password until they redeem an invitation. Setup links
+  expire after **24 hours**; recovery and email-confirmation links expire after
+  **30 minutes**. Each link is single use. Request a new invitation from an admin
+  if setup expires; use **Forgot password?** if an established password is lost.
+- New passwords must be **15 to 1024 characters**. Existing passwords remain valid
+  until changed. Setup and recovery do not sign the user in automatically.
+- Password setup, recovery, email confirmation, and account status changes revoke
+  previously issued bearer tokens. A completed email change also requires signing
+  in with the new address.
+- Recovery requests are limited to three per email per hour, and redemption
+  attempts to ten per token per hour. Unknown, inactive, and rate-limited recovery
+  requests receive the same public message. Mail delivery is asynchronous; use
+  Mailpit in development to check that it arrived.
+- The admin cannot see or set a user's password. Admin creation accepts a name
+  and email only; password hashes and raw link tokens are not returned by the API.
+- PostgreSQL stores a hash of each single-use link token in `action_tokens`.
+  Email bodies containing links are encrypted in `mail_outbox`; the SMTP worker
+  retries failures and removes each queued message after successful delivery.
+
 ## Configuration
 
 | Variable                   | Example/default                                            | Meaning                                                         |
@@ -104,10 +152,15 @@ Stop the API and Vite with Ctrl+C. Use `docker compose stop` to stop the develop
 | `JWT_SECRET`               | Development fallback if unset                              | Signing secret; configure a strong unique value for deployment. |
 | `FRONTEND_ORIGIN`          | `http://localhost:5173`                                    | Single browser origin allowed by CORS.                          |
 | `FIRST_SUPERUSER_EMAIL`    | `admin@example.com`                                        | Email used when creating the initial administrator.             |
-| `FIRST_SUPERUSER_PASSWORD` | `changethis`                                               | Password used only when that account is first created.          |
-| `SMTP_HOST`, `SMTP_PORT`   | `mailpit`, `1025` in `.env.example`                        | Reserved email settings; currently unused by the API.           |
+| `FIRST_SUPERUSER_PASSWORD` | `development-admin-password` | Required when that account is first created; 15 to 1024 characters. |
+| `SMTP_HOST`, `SMTP_PORT` | `localhost`, `1025` in `.env.example` | Outbound SMTP endpoint. |
+| `SMTP_TLS` | `none` locally; `starttls` or `tls` in deployment | SMTP transport security. |
+| `SMTP_USERNAME`, `SMTP_PASSWORD` | unset locally | Optional SMTP credentials. |
+| `MAIL_FROM` | `Workspace <noreply@example.com>` | Sender mailbox. |
+| `MAIL_ENCRYPTION_KEY` | 64 hex digits in `.env.example` | 32-byte AES key for queued email; use a unique secret in deployment and retain it while mail is queued. |
+| `PUBLIC_URL` | `http://localhost:5173` | Trusted base URL for email links; use HTTPS in deployment. |
 
-Changing bootstrap credentials does not update an existing account. Use a lowercase administrator email, because login normalizes email addresses to lowercase. `mailpit` is a Compose network hostname; a future mail client running on the host would use `localhost:1025`.
+Existing installations must add the new mail settings to `.env` before restarting. Changing bootstrap credentials does not update an existing account. Email addresses are normalized to lowercase. Use `localhost:1025` when the API runs on the host and `mailpit:1025` when it runs inside the Compose network. Do not use the example encryption key or bootstrap password in deployment.
 
 To use another API port:
 
@@ -121,19 +174,48 @@ Also update the `/api` proxy target in `frontend/vite.config.ts` and restart Vit
 
 All application endpoints use the `/api/v1` prefix.
 
-| Method       | Path          | Access and behavior                                           |
-| ------------ | ------------- | ------------------------------------------------------------- |
-| GET          | `/health`     | Public liveness check; does not query PostgreSQL.             |
-| POST         | `/login`      | Public; exchange email/password for a bearer token.           |
-| POST         | `/users`      | Public registration; password must contain at least 12 bytes. |
-| GET          | `/users`      | Active superusers only; list users.                           |
-| GET / PUT    | `/users/me`   | Active user; read profile or update `full_name`.              |
-| GET / POST   | `/items`      | Active user; list owned items or create an item.              |
-| PUT / DELETE | `/items/{id}` | Active owner; update or delete an item.                       |
+| Method | Path | Access and behavior |
+| ------ | ---- | ------------------- |
+| GET | `/health` | Public liveness check. |
+| POST | `/login` | Public email/password login. |
+| GET / POST | `/users` | Active admin only; list users or create a regular user and queue an invitation. |
+| PUT | `/users/{id}/status` | Admin only; activate or deactivate a user. |
+| POST | `/users/{id}/resend-invitation` | Admin only; issue a fresh link for a user without a password. |
+| GET / PUT | `/users/me` | Active user; read profile or edit display name. |
+| POST | `/users/me/email-change` | Active user; request a verified login-email change with current password. |
+| POST | `/users/confirm-email` | Public; redeem an email-confirmation link. |
+| POST | `/password/setup` | Public; redeem an invitation link to choose a password. |
+| POST | `/password/recovery-requests` | Public; request a recovery link with a generic response. |
+| POST | `/password/recover` | Public; redeem a recovery link to set a new password. |
+| GET / POST | `/items` | Active user; list or create owned items. |
+| PUT / DELETE | `/items/{id}` | Active owner; update or delete an item. |
 
-Tokens expire after 24 hours. Every authenticated request reloads the active user from PostgreSQL, so deactivation and permission changes take effect without waiting for token expiry. Even superusers see and modify only their own items. Missing items and items owned by another user both return 404.
+JWTs expire after 24 hours. Every authenticated request reloads the active user and authentication version from PostgreSQL, so deactivation, password resets, email changes, and permission changes take effect immediately. Even superusers see and modify only their own items. Missing items and items owned by another user both return 404.
 
-The frontend stores the bearer token in local storage and removes it on logout. API errors normally use `{ "detail": "..." }`; Axum request-extraction errors can be plain text. A successful item deletion returns 204 with no response body.
+The frontend stores the bearer token in local storage and removes it on logout. Send it as `Authorization: Bearer <access_token>` when calling authenticated endpoints directly. API errors normally use `{ "detail": "..." }`; Axum request-extraction errors can be plain text. Successful account-link actions and item deletion return 204 with no response body.
+
+### Request bodies for account operations
+
+These JSON bodies are accepted under `/api/v1`; admin and profile calls also require
+the bearer token returned by `/login`. The token in an emailed URL is sent in the
+JSON body when redeeming that link.
+
+| Method and path | JSON body | Result |
+| --------------- | --------- | ------ |
+| `POST /login` | `{"email":"admin@example.com","password":"…"}` | `access_token` and `token_type`. |
+| `POST /users` | `{"email":"person@example.com","full_name":"Person"}` | New regular user and queued invitation; no password input or output. |
+| `PUT /users/{id}/status` | `{"is_active":false}` or `{"is_active":true}` | Updated user. |
+| `POST /users/{id}/resend-invitation` | No body | 204; available only while the active user has no password. |
+| `PUT /users/me` | `{"full_name":"New Name"}` | Updated user and queued email notice. |
+| `POST /users/me/email-change` | `{"email":"new@example.com","current_password":"…"}` | 204; the login email remains unchanged until confirmation. |
+| `POST /users/confirm-email` | `{"token":"…"}` | 204; login with the new address. |
+| `POST /password/recovery-requests` | `{"email":"person@example.com"}` | Generic message for every account state. |
+| `POST /password/setup` or `/password/recover` | `{"token":"…","password":"…"}` | 204; sign in normally afterward. |
+
+The item endpoints accept `{"title":"…","description":"…","quantity":1}` for
+creation and updates. `description` defaults to empty and `quantity` to 1 on
+creation; updates require all three fields. IDs, ownership, and creation times are
+assigned by the API.
 
 ### Interactive documentation
 
@@ -162,7 +244,8 @@ The backend is organized by responsibility:
 
 - `src/main.rs`: logging, environment configuration, and HTTP server startup.
 - `src/db.rs`: database connection, migrations, and initial superuser creation.
-- `src/state.rs`: shared database pool and JWT secret.
+- `src/state.rs`: shared database pool, JWT secret, mail encryption key, and public URL.
+- `src/mail.rs`: encrypted durable email queue and SMTP delivery worker.
 - `src/routes/mod.rs`: route registration, CORS, and request tracing.
 - `src/routes/docs.rs`: OpenAPI specification and Swagger UI.
 - `src/routes/health.rs`, `users.rs`, and `items.rs`: health, user, and item handlers.
@@ -184,13 +267,13 @@ Other important files:
 
 ## Frontend development
 
-The login, overview, inventory, and users templates follow [Sakai's official layout](https://github.com/primefaces/sakai-vue/tree/master/src/layout) and [dashboard examples](https://github.com/primefaces/sakai-vue/tree/master/src/components/dashboard), adapted to the existing API data. Navigation can be collapsed from the topbar and stacks above the content on small screens.
+The login, overview, inventory, users, and profile pages follow [Sakai's official layout](https://github.com/primefaces/sakai-vue/tree/master/src/layout) and [dashboard examples](https://github.com/primefaces/sakai-vue/tree/master/src/components/dashboard), adapted to the existing API data. Navigation can be collapsed from the topbar and stacks above the content on small screens.
 
 Styling uses Tailwind CSS v4 via `@tailwindcss/vite` and the official `tailwindcss-primeui` integration. Add utility classes directly to Vue templates; semantic utilities such as `bg-primary`, `border-surface`, and `text-muted-color` follow the Aura theme. PrimeVue controls retain their Aura styling, with the `primevue` CSS layer before Tailwind utilities so utilities can override controls. See the [official PrimeVue Tailwind guide](https://primevue.org/tailwind/).
 
 `frontend/src/style.css` contains the Tailwind imports and shared base styles. The `.app-dark` class is applied to the document root, keeping Tailwind, PrimeVue, and teleported dialogs in sync. No separate Tailwind config file is needed for v4.
 
-Items include a non-negative integer `quantity` (defaults to 1 for existing items and requests that omit it) and a server-generated `created_at` timestamp. The admin table can sort both columns and formats creation dates in the browser's local time. Apply migrations before compiling changed SQLx queries: `cargo sqlx migrate run` with `DATABASE_URL` configured. Startup also runs pending migrations.
+Items include a non-negative integer `quantity` (defaults to 1 for existing items and requests that omit it) and a server-generated `created_at` timestamp. The items table can sort quantity and creation time, and formats creation dates in the browser's local time. Apply migrations before compiling changed SQLx queries: `cargo sqlx migrate run` with `DATABASE_URL` configured. Startup also runs pending migrations.
 
 ## Database migrations
 
@@ -344,11 +427,11 @@ database, applies migrations, and removes the database after a successful test.
 Failed test databases are retained by SQLx for debugging. Use a local development
 PostgreSQL instance for this suite.
 
-The backend suite covers registration/login, token validation and account
-revocation, current admin permissions, item ownership and CRUD, quantity
-validation, profile isolation, HTTP rejection statuses, CORS, safe error
-responses, password hashing, and migration backfills and constraints. The existing
-Swagger/OpenAPI test also runs as part of this command.
+The backend suite covers invitations, recovery, token expiry and concurrent
+redemption, throttling, password and email-change revocation, admin permissions,
+SMTP retry queuing, item ownership and CRUD, quantity validation, profile
+isolation, HTTP contracts, CORS, password hashing, migration constraints, and
+Swagger/OpenAPI.
 
 ```bash
 set -a
@@ -371,25 +454,21 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Playwright starts Vite on `127.0.0.1:5173`, or reuses an existing server there. Most tests mock API responses. The `dashboard.spec.ts` smoke test uses the real API and prefilled administrator credentials, so the API must be running with that development account for the full suite.
+Playwright starts Vite on `127.0.0.1:5173`, or reuses an existing server there. Browser tests mock API responses, so they do not require a running API.
 
-To run only the mocked browser tests without an API server:
-
-```bash
-npm run test:e2e -- --grep-invert "login dashboard is usable"
-```
-
-The smoke test writes `artifacts/dashboard.png` at the repository root; failures can also produce screenshots under `frontend/test-results/`. On Linux systems missing browser libraries, use `npx playwright install --with-deps chromium` with the appropriate system permissions.
+The browser suite covers the invitation, recovery, email-confirmation, admin, and
+profile screens alongside inventory, navigation, tables, and mobile layout.
+The dashboard test writes `artifacts/dashboard.png` at the repository root; failures can also produce screenshots under `frontend/test-results/`. On Linux systems missing browser libraries, use `npx playwright install --with-deps chromium` with the appropriate system permissions.
 
 ## Production hosting
 
-Workspace pages use Vue Router history URLs: `/overview`, `/items`, and `/users`.
+Workspace pages use Vue Router history URLs: `/overview`, `/items`, `/users`, and `/profile`. Public account pages use `/login`, `/forgot-password`, `/set-password`, `/reset-password`, and `/confirm-email`.
 Navigation supports browser Back/Forward, bookmarks, and refreshes. Opening a page
 while signed out redirects to `/login?redirect=...` and continues to the requested
 workspace page after sign-in. Only known workspace paths are accepted as redirect
 destinations. Signing out goes to `/login`; signed-in visits to `/login` go to
 `/overview`.
-The Users page is restricted to administrators; members are returned to Overview.
+The Users page is restricted to administrators; members are returned to Overview. Email links use `PUBLIC_URL`, so configure it to the deployed HTTPS frontend origin.
 The root URL and unknown frontend paths redirect to `/overview`.
 
 Build the frontend with `cd frontend && npm run build`, then serve `frontend/dist`.
@@ -435,7 +514,7 @@ static hosting provider, configure its equivalent SPA fallback and API proxy.
 
 Build the backend with `cargo build --release` against a migrated database, or prepare offline query metadata first. Run `target/release/axum-vue-template` with the required environment variables and database access. Axum serves the API and documentation; the frontend assets are served separately by your web host.
 
-Use deployment-specific database credentials, a strong `JWT_SECRET`, and a changed bootstrap password. Terminate HTTPS at your proxy and configure `FRONTEND_ORIGIN` for the deployed frontend. The supplied Compose file is for development; plan persistent database storage and backups separately.
+Use deployment-specific database credentials, a strong `JWT_SECRET`, a unique `MAIL_ENCRYPTION_KEY`, an SMTP sender with TLS, and a changed bootstrap password. Terminate HTTPS at your proxy; configure `FRONTEND_ORIGIN` and `PUBLIC_URL` for the deployed frontend. Keep the mail encryption key while queued mail remains, because the worker needs it to retry delivery. The supplied Compose file is for development; plan persistent database storage and backups separately.
 
 ## Troubleshooting
 
@@ -446,6 +525,8 @@ Use deployment-specific database credentials, a strong `JWT_SECRET`, and a chang
 | API reports a missing environment variable                | Source `.env` with `set -a` in the same terminal before `cargo run`.                                   |
 | Frontend requests fail after changing API ports           | Update the Vite proxy target and restart Vite.                                                         |
 | Login fails after editing bootstrap credentials           | Existing accounts retain their original credentials; the environment variables only seed new accounts. |
+| Invitation or recovery email does not arrive             | Check Mailpit or the configured SMTP service, `MAIL_FROM`, `SMTP_TLS`, and the queued `mail_outbox` rows; failed deliveries are retried. |
+| Email link opens the wrong host or expires                | Set `PUBLIC_URL` to the deployed HTTPS frontend origin and request a fresh link after expiry. |
 | Refreshing `/items` or `/users` returns 404 in production | Configure the SPA fallback described above.                                                            |
 | Swagger UI returns the frontend HTML                      | Forward `/docs`, `/docs/`, and `/api-docs/` to Axum.                                                   |
 | Backend tests cannot create a database                    | Use a development PostgreSQL role with database-creation permission.                                   |

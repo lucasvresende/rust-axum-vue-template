@@ -13,7 +13,14 @@ use crate::state::AppState;
     paths(
         super::health::health,
         crate::auth::login,
-        super::users::register,
+        super::users::create_user,
+        super::users::set_active,
+        super::users::resend_invitation,
+        super::users::setup_password,
+        super::users::request_recovery,
+        super::users::recover_password,
+        super::users::request_email_change,
+        super::users::confirm_email,
         super::users::me,
         super::users::update_me,
         super::users::users,
@@ -74,6 +81,8 @@ mod tests {
                 .connect_lazy("postgres://unused:unused@localhost/unused")
                 .unwrap(),
             secret: Arc::new("test-secret".into()),
+            mail_key: Arc::new([7_u8; 32]),
+            public_url: Arc::new("http://localhost:5173".into()),
         };
         let app = crate::routes::router(state, "http://localhost:5173".parse().unwrap());
         for path in ["/docs/", "/docs/swagger-ui-bundle.js"] {
@@ -104,13 +113,20 @@ mod tests {
             serde_json::from_slice(&to_bytes(response.into_body(), usize::MAX).await.unwrap())
                 .unwrap();
         let paths = spec["paths"].as_object().unwrap();
-        assert_eq!(paths.len(), 6);
+        assert_eq!(paths.len(), 13);
         let expected = [
             ("/api/v1/health", "get", false),
             ("/api/v1/login", "post", false),
-            ("/api/v1/users", "post", false),
+            ("/api/v1/users", "post", true),
             ("/api/v1/users", "get", true),
             ("/api/v1/users/me", "get", true),
+            ("/api/v1/users/me/email-change", "post", true),
+            ("/api/v1/users/confirm-email", "post", false),
+            ("/api/v1/users/{id}/status", "put", true),
+            ("/api/v1/users/{id}/resend-invitation", "post", true),
+            ("/api/v1/password/setup", "post", false),
+            ("/api/v1/password/recovery-requests", "post", false),
+            ("/api/v1/password/recover", "post", false),
             ("/api/v1/users/me", "put", true),
             ("/api/v1/items", "get", true),
             ("/api/v1/items", "post", true),
@@ -140,6 +156,12 @@ mod tests {
             "NewItem",
             "Profile",
             "UpdateItem",
+            "SetPassword",
+            "RecoveryRequest",
+            "EmailChange",
+            "ConfirmEmail",
+            "SetActive",
+            "GenericMessage",
             "ErrorResponse",
         ] {
             assert!(

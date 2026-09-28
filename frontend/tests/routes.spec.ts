@@ -1,3 +1,4 @@
+import { signIn } from "./helpers";
 import { test, expect } from "@playwright/test";
 
 for (const admin of [true, false]) {
@@ -25,7 +26,7 @@ for (const admin of [true, false]) {
         url.searchParams.get("redirect") === "/items",
     );
     await page.reload();
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await signIn(page);
     await expect(
       page.getByRole("heading", { name: "My items", exact: true }),
     ).toBeVisible();
@@ -82,7 +83,7 @@ for (const redirect of [
       });
     });
     await page.goto(`/login?redirect=${encodeURIComponent(redirect)}`);
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await signIn(page);
     await expect(page).toHaveURL(
       redirect === "/items" ? /\/items$/ : /\/overview$/,
     );
@@ -107,7 +108,7 @@ test("expired sessions return to login and retain destination", async ({
       url.pathname === "/login" &&
       url.searchParams.get("redirect") === "/items",
   );
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await signIn(page);
   await expect(page.getByRole("button", { name: "Sign in" })).toBeEnabled();
   await expect(page).toHaveURL(
     (url) =>

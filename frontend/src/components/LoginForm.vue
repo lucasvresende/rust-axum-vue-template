@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import Button from "primevue/button";
+import { RouterLink } from "vue-router";
 import Card from "primevue/card";
 import InputText from "primevue/inputtext";
 import Password from "primevue/password";
@@ -48,8 +49,10 @@ const emit = defineEmits<{ submit: [] }>();
             :loading="loading"
           />
         </form>
-        <p class="mt-6 text-center text-xs text-muted-color">
-          Demo: admin@example.com / changethis
+        <p class="mt-6 text-center text-sm">
+          <RouterLink to="/forgot-password" class="text-primary"
+            >Forgot password?</RouterLink
+          >
         </p></template
       >
     </Card>

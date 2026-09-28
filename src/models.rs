@@ -20,6 +20,7 @@ pub(crate) struct User {
     pub(crate) full_name: String,
     pub(crate) is_active: bool,
     pub(crate) is_superuser: bool,
+    pub(crate) needs_setup: bool,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -41,12 +42,34 @@ pub(crate) struct Login {
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct NewUser {
     pub(crate) email: String,
-    /// Must contain at least 12 bytes (validated using Rust string length).
+    pub(crate) full_name: String,
+}
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub(crate) struct SetPassword {
+    pub(crate) token: String,
     #[schema(format = Password)]
     pub(crate) password: String,
-    pub(crate) full_name: Option<String>,
+}
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub(crate) struct RecoveryRequest {
+    pub(crate) email: String,
+}
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub(crate) struct EmailChange {
+    pub(crate) email: String,
+    #[schema(format = Password)]
+    pub(crate) current_password: String,
+}
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub(crate) struct ConfirmEmail {
+    pub(crate) token: String,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]

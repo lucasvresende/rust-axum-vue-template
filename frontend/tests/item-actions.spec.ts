@@ -1,3 +1,4 @@
+import { signIn } from "./helpers";
 import { test, expect } from "@playwright/test";
 
 test("edit item and require confirmation before deleting", async ({ page }) => {
@@ -52,7 +53,7 @@ test("edit item and require confirmation before deleting", async ({ page }) => {
 
   await page.goto("/");
 
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await signIn(page);
   const actions = page.getByRole("button", { name: "Actions for Bolts" });
   await actions.focus();
   await page.keyboard.press("Enter");

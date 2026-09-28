@@ -28,18 +28,26 @@ const emit = defineEmits<{ create: [] }>();
         WORKSPACE
       </p>
       <h1 class="mb-2 text-2xl font-semibold tracking-tight lg:text-3xl">
-        {{ activeView === "items" ? "My items" : "Users" }}
+        {{
+          activeView === "items"
+            ? "My items"
+            : activeView === "profile"
+              ? "Profile"
+              : "Users"
+        }}
       </h1>
       <p class="text-muted-color">
         {{
           activeView === "items"
             ? "Manage your personal inventory."
-            : "View workspace members and their roles."
+            : activeView === "profile"
+              ? "Edit your account details."
+              : "View workspace members and their roles."
         }}
       </p>
     </div>
     <Button
-      v-if="activeView !== 'users'"
+      v-if="activeView === 'items' || activeView === 'overview'"
       label="New item"
       icon="pi pi-plus"
       @click="emit('create')"

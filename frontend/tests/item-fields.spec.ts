@@ -1,3 +1,4 @@
+import { signIn } from "./helpers";
 import { test, expect } from "@playwright/test";
 
 test("item creation sends quantity and displays server creation date", async ({
@@ -30,7 +31,7 @@ test("item creation sends quantity and displays server creation date", async ({
     return route.fulfill({ json: items });
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await signIn(page);
   await page.getByRole("button", { name: "New item" }).click();
   await expect(page.getByRole("spinbutton", { name: "Quantity" })).toHaveValue(
     "1",

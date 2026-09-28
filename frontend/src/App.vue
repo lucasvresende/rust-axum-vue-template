@@ -8,6 +8,8 @@ import { useToast } from "primevue/usetoast";
 import { api, session } from "./api";
 
 import LoginForm from "./components/LoginForm.vue";
+import AccountFlows from "./components/AccountFlows.vue";
+import ProfilePage from "./components/ProfilePage.vue";
 import AppHeader from "./components/AppHeader.vue";
 import WorkspaceNav from "./components/WorkspaceNav.vue";
 import DashboardHero from "./components/DashboardHero.vue";
@@ -19,8 +21,8 @@ import type { Item, User, WorkspaceView } from "./types";
 
 const toast = useToast();
 
-const email = ref("admin@example.com"),
-  password = ref("changethis"),
+const email = ref(""),
+  password = ref(""),
   user = ref<User | null>(null),
   items = ref<Item[]>([]),
   users = ref<User[]>([]),
@@ -63,14 +65,16 @@ watch(
 const route = useRoute();
 const router = useRouter();
 const activeView = computed<WorkspaceView>(() =>
-  route.name === "items" || route.name === "users" ? route.name : "overview",
+  route.name === "items" || route.name === "users" || route.name === "profile"
+    ? route.name
+    : "overview",
 );
 
 /** Allow only known workspace paths as post-login destinations. */
 function loginDestination() {
   const redirect = route.query.redirect;
   return typeof redirect === "string" &&
-    ["/overview", "/items", "/users"].includes(redirect)
+    ["/overview", "/items", "/users", "/profile"].includes(redirect)
     ? redirect
     : "/overview";
 }
@@ -100,6 +104,7 @@ async function load() {
   user.value = await api<User>("/users/me");
   items.value = await api<Item[]>("/items");
   if (user.value.is_superuser) users.value = await api<User[]>("/users");
+  else users.value = [];
 }
 
 /** Store the token, load the workspace, and resume an allowed destination. */
@@ -190,7 +195,10 @@ function logout() {
 }
 
 onMounted(async () => {
-  if (session.token)
+  if (
+    session.token &&
+    !["forgot", "reset", "setup", "confirmEmail"].includes(String(route.name))
+  )
     try {
       await load();
     } catch {
@@ -210,6 +218,13 @@ onMounted(async () => {
       v-model:password="password"
       :loading="loading"
       @submit="login"
+    />
+    <AccountFlows
+      v-else-if="
+        ['forgot', 'reset', 'setup', 'confirmEmail'].includes(
+          String(route.name),
+        )
+      "
     />
     <template v-else-if="user">
       <AppHeader
@@ -241,15 +256,25 @@ onMounted(async () => {
             :item-count="items.length"
             :is-superuser="user.is_superuser"
           />
+          <ProfilePage
+            v-if="activeView === 'profile'"
+            :user="user"
+            @updated="user = $event"
+          />
           <ItemsTable
-            v-if="activeView !== 'users'"
+            v-if="activeView !== 'users' && activeView !== 'profile'"
             :items="items"
             @remove="requestDelete"
             @edit="openItem"
           />
           <UsersTable
-            v-if="user.is_superuser && activeView !== 'items'"
+            v-if="
+              user.is_superuser &&
+              (activeView === 'overview' || activeView === 'users')
+            "
             :users="users"
+            :current-user-id="user.id"
+            @changed="load"
           />
           <footer class="py-4 text-center text-sm text-muted-color">
             Axum + Vue <span class="mx-2">·</span> Admin workspace

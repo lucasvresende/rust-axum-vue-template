@@ -1,3 +1,4 @@
+import { signIn } from "./helpers";
 import { test, expect, type Locator, type Page } from "@playwright/test";
 
 async function expectInsideMenu(menu: Locator, field: Locator) {
@@ -68,7 +69,7 @@ for (const view of ["items", "users"] as const) {
       });
     });
     await page.goto(`/${view}`);
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await signIn(page);
     const rows = page.locator("tbody tr");
     const field = view === "items" ? "Title" : "Name";
     const value = view === "items" ? "Item 11" : "Person 11";
@@ -130,7 +131,7 @@ for (const mobile of [false, true]) {
       }),
     );
     await page.goto("/");
-    await page.getByRole("button", { name: "Sign in" }).click();
+    await signIn(page);
     const nav = page.getByRole("navigation", { name: "Workspace" });
     await expect(nav).toBeVisible();
     await page.evaluate(() => {
@@ -199,7 +200,7 @@ async function filterFixture(page: Page) {
     });
   });
   await page.goto("/items");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await signIn(page);
 }
 
 for (const mobile of [false, true]) {

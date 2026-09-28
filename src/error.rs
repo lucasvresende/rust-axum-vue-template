@@ -19,6 +19,8 @@ pub(crate) enum ApiError {
     NotFound,
     #[error("bad request: {0}")]
     Bad(&'static str),
+    #[error("too many requests")]
+    TooManyRequests,
     #[error("email already registered")]
     Conflict,
     #[error(transparent)]
@@ -34,6 +36,7 @@ impl IntoResponse for ApiError {
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Bad(_) => StatusCode::BAD_REQUEST,
             Self::Conflict => StatusCode::CONFLICT,
+            Self::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
             Self::Db(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         let detail = match &self {

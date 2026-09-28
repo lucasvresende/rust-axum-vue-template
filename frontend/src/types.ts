@@ -4,6 +4,7 @@ export interface User {
   full_name: string;
   is_active: boolean;
   is_superuser: boolean;
+  needs_setup?: boolean;
 }
 
 export interface Item {
@@ -15,7 +16,7 @@ export interface Item {
   created_at: string;
 }
 
-export type WorkspaceView = "overview" | "items" | "users";
+export type WorkspaceView = "overview" | "items" | "users" | "profile";
 
 export interface TableColumn {
   field: string;

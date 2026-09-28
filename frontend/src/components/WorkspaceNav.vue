@@ -21,6 +21,7 @@ defineProps<{ isSuperuser: boolean; activeView: WorkspaceView }>();
           { id: 'overview', label: 'Overview', icon: 'pi-home' },
           { id: 'items', label: 'My items', icon: 'pi-box' },
           { id: 'users', label: 'Users', icon: 'pi-users' },
+          { id: 'profile', label: 'Profile', icon: 'pi-user' },
         ] as const"
         :key="entry.id"
       >
